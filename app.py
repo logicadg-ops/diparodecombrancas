@@ -2,12 +2,16 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, abort
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import config
 from services import condomob, email_service, r2_client, supabase_client
 
 app = Flask(__name__)
 app.secret_key = config.FLASK_SECRET_KEY
+# Atrás do proxy da Heroku (TLS termina lá), sem isso url_for(_external=True)
+# geraria links http:// em vez de https://.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 
 def contato_da_unidade(unidade_row):
