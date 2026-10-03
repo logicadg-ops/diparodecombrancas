@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Boleto {{ unidade.unidade }} - 2ª via{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('ver_condominio_2via', condominio_id=condominio.id) }}">&larr; {{ condominio.nome }}</a></p>
+  <h2>Unidade {{ unidade.unidade }} <span class="muted">— 2ª via</span></h2>
+  <p>
+    Proprietário: {{ contato.nome }} — {{ contato.email or "sem email cadastrado" }}
+    <a href="{{ url_for('editar_unidade', condominio_id=condominio.id, unidade=unidade.unidade, origem='2via') }}"
+       class="icone-editar" title="Editar nome e email da unidade">✏️</a>
+  </p>
+
+  {% if erro %}
+    <p class="flash-error">{{ erro }}</p>
+  {% else %}
+    <table>
+      {% if cobranca.documento %}<tr><th>Documento</th><td>{{ cobranca.documento }}</td></tr>{% endif %}
+      <tr><th>Vencimento</th><td>{{ cobranca.vencimento or "—" }}</td></tr>
+      <tr><th>Valor</th><td>{% if cobranca.valor %}R$ {{ cobranca.valor }}{% else %}—{% endif %}</td></tr>
+      {% if cobranca.linhaDigitavel %}<tr><th>Linha digitável</th><td>{{ cobranca.linhaDigitavel }}</td></tr>{% endif %}
+      {% if cobranca.pix %}<tr><th>PIX Copia e Cola</th><td class="quebra">{{ cobranca.pix }}</td></tr>{% endif %}
+    </table>
+    <p><a href="{{ cobranca.link }}" target="_blank" rel="noopener">Visualizar / baixar boleto</a></p>
+
+    <form method="post"
+          action="{{ url_for('enviar_individual_2via', condominio_id=condominio.id, unidade=unidade.unidade) }}">
+      <button type="submit">Enviar por email</button>
+    </form>
+  {% endif %}
+{% endblock %}

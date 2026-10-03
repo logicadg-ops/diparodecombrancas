@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Editar unidade {{ unidade.unidade }}{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for(destino, condominio_id=condominio.id) }}">&larr; {{ condominio.nome }}</a></p>
+  <h2>Editar dados — Unidade {{ unidade.unidade }}</h2>
+
+  <div class="cartao">
+    <form method="post" class="form-coluna">
+      <input type="hidden" name="origem" value="{{ origem }}">
+      <label>
+        Proprietário / Nome:
+        <input type="text" name="proprietario" value="{{ unidade.proprietario or '' }}" required class="input-largo">
+      </label>
+      <label>
+        Email:
+        <input type="text" name="email" value="{{ unidade.email or '' }}"
+               placeholder="Separe múltiplos emails com ;" class="input-largo">
+      </label>
+      <label>
+        Telefone 1:
+        <input type="text" name="fone1" value="{{ unidade.fone1 or '' }}" class="input-largo">
+      </label>
+      <label>
+        Telefone 2:
+        <input type="text" name="fone2" value="{{ unidade.fone2 or '' }}" class="input-largo">
+      </label>
+      <button type="submit">Salvar</button>
+    </form>
+  </div>
+{% endblock %}

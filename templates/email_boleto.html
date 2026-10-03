@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Boleto condominial</title>
+</head>
+<body style="margin:0; padding:0; background-color:#eef1f5; font-family: Arial, Helvetica, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#eef1f5; padding: 24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0"
+               style="background-color:#ffffff; border-radius:8px; overflow:hidden; max-width:600px; width:100%;">
+
+          <!-- Cabeçalho -->
+          <tr>
+            <td style="background-color:#1c3d5a; padding:24px 32px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="color:#ffffff; font-size:20px; font-weight:bold;">
+                    {{ condominio_nome }}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="color:#c9d6e3; font-size:13px; padding-top:4px;">
+                    Comunicado de cobrança condominial
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Corpo -->
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px; font-size:15px; color:#1c1e21;">
+                Olá, <strong>{{ proprietario }}</strong>.
+              </p>
+              <p style="margin:0 0 24px; font-size:15px; color:#1c1e21; line-height:1.5;">
+                Segue abaixo o boleto referente à unidade <strong>{{ unidade }}</strong>.
+                Por favor, efetue o pagamento até a data de vencimento para evitar
+                encargos.
+              </p>
+
+              <!-- Cartão de valores -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                     style="background-color:#f5f7fa; border-radius:6px; margin-bottom:24px;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="font-size:13px; color:#5b6572; padding-bottom:4px;">Unidade</td>
+                        <td style="font-size:13px; color:#5b6572; padding-bottom:4px;" align="right">Vencimento</td>
+                      </tr>
+                      <tr>
+                        <td style="font-size:16px; color:#1c1e21; font-weight:bold;">{{ unidade }}</td>
+                        <td style="font-size:16px; color:#c0392b; font-weight:bold;" align="right">{{ vencimento_formatado }}</td>
+                      </tr>
+                      <tr><td colspan="2" style="padding-top:16px; border-top:1px solid #e0e4e9; margin-top:16px;"></td></tr>
+                      <tr>
+                        <td colspan="2" style="font-size:13px; color:#5b6572; padding-top:12px;">Valor a pagar</td>
+                      </tr>
+                      <tr>
+                        <td colspan="2" style="font-size:28px; color:#1c3d5a; font-weight:bold; padding-top:4px;">
+                          R$ {{ valor_formatado }}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Botão -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+                <tr>
+                  <td align="center">
+                    <a href="{{ link }}"
+                       style="display:inline-block; background-color:#2f7dd1; color:#ffffff; text-decoration:none;
+                              font-size:15px; font-weight:bold; padding:14px 32px; border-radius:6px;">
+                      Visualizar boleto
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Linha digitável -->
+              <p style="margin:0 0 6px; font-size:13px; color:#5b6572;">Linha digitável (código de barras)</p>
+              <p style="margin:0 0 20px; font-size:14px; color:#1c1e21; font-family: 'Courier New', monospace;
+                        background-color:#f5f7fa; border-radius:4px; padding:12px 14px; word-break:break-all;">
+                {{ linha_digitavel }}
+              </p>
+
+              <!-- PIX -->
+              <p style="margin:0 0 6px; font-size:13px; color:#5b6572;">PIX Copia e Cola</p>
+              <p style="margin:0; font-size:12px; color:#1c1e21; font-family: 'Courier New', monospace;
+                        background-color:#f5f7fa; border-radius:4px; padding:12px 14px; word-break:break-all;">
+                {{ pix }}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Rodapé -->
+          <tr>
+            <td style="background-color:#f5f7fa; padding:20px 32px; text-align:center;">
+              <p style="margin:0; font-size:12px; color:#8a94a1;">
+                Este é um email automático, não é necessário responder.
+              </p>
+              <p style="margin:4px 0 0; font-size:12px; color:#8a94a1;">
+                {{ condominio_nome }}
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

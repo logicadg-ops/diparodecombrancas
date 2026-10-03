@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Condomínios{% endblock %}
+{% block content %}
+  <h2>Selecionar condomínio</h2>
+  {% if condominios %}
+    <form id="form-condominio" onsubmit="return irParaCondominio(event)">
+      <div class="filtros">
+        <label>
+          Condomínio:
+          <select name="condominio_id" id="condominio_id">
+            {% for c in condominios %}
+              <option value="{{ c.id }}">
+                {{ c.nome }}{% if c.status %} ({{ c.status }}){% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label>
+          Mês de vencimento:
+          <select id="filtro-mes">
+            <option value="">Todos</option>
+            {% for m in meses_nomes %}
+              <option value="{{ "%02d"|format(loop.index) }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label>
+          Ano:
+          <select id="filtro-ano">
+            <option value="">Todos</option>
+            {% for a in anos %}
+              <option value="{{ a }}" {% if a == ano_atual %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+
+      <button type="submit">Ver unidades</button>
+    </form>
+
+    <script>
+      const baseUrl = "{{ url_for('ver_condominio', condominio_id=0) }}";
+      function irParaCondominio(ev) {
+        ev.preventDefault();
+        const id = document.getElementById('condominio_id').value;
+        const mes = document.getElementById('filtro-mes').value;
+        const ano = document.getElementById('filtro-ano').value;
+        let url = baseUrl.replace('/0', '/' + id);
+        if (mes && ano) {
+          url += '?mes=' + ano + '-' + mes;
+        }
+        window.location.href = url;
+        return false;
+      }
+    </script>
+  {% else %}
+    <p>Nenhum condomínio encontrado na tabela <code>condominio</code> do Supabase.</p>
+  {% endif %}
+{% endblock %}

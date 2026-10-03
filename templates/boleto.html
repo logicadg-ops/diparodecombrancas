@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Boleto {{ unidade.unidade }}{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('ver_condominio', condominio_id=condominio.id) }}">&larr; {{ condominio.nome }}</a></p>
+  <h2>Unidade {{ unidade.unidade }}</h2>
+  <p>
+    Proprietário: {{ contato.nome }} — {{ contato.email or "sem email cadastrado" }}
+    <a href="{{ url_for('editar_unidade', condominio_id=condominio.id, unidade=unidade.unidade, origem='padrao') }}"
+       class="icone-editar" title="Editar nome e email da unidade">✏️</a>
+  </p>
+
+  {% if erro %}
+    <p class="flash-error">{{ erro }}</p>
+  {% else %}
+    <table>
+      <tr><th>Documento</th><td>{{ cobranca.documento }}</td></tr>
+      <tr><th>Vencimento</th><td>{{ cobranca.vencimento }}</td></tr>
+      <tr><th>Valor</th><td>R$ {{ cobranca.valor }}</td></tr>
+      <tr><th>Linha digitável</th><td>{{ cobranca.linhaDigitavel }}</td></tr>
+      <tr><th>PIX Copia e Cola</th><td class="quebra">{{ cobranca.pix }}</td></tr>
+    </table>
+    <p><a href="{{ cobranca.link }}" target="_blank" rel="noopener">Visualizar / baixar boleto</a></p>
+
+    <form method="post"
+          action="{{ url_for('enviar_individual', condominio_id=condominio.id, unidade=unidade.unidade) }}">
+      <button type="submit">Enviar por email</button>
+    </form>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Resultado do envio em massa{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('ver_condominio', condominio_id=condominio.id) }}">&larr; {{ condominio.nome }}</a></p>
+  <h2>Resultado do envio em massa — {{ condominio.nome }}</h2>
+  <table>
+    <thead><tr><th>Unidade</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for r in resultados %}
+        <tr>
+          <td>{{ r.unidade }}</td>
+          <td>{{ r.status }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

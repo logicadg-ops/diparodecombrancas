@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}{{ condominio.nome }} - 2ª via{% endblock %}
+{% block body_class %}pagina-larga{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('index') }}">&larr; Condomínios</a></p>
+  <h2>{{ condominio.nome }} <span class="muted">— Boletos 2ª via</span></h2>
+  <p class="muted">
+    Envio a partir dos PDFs já salvos no armazenamento (bucket R2).
+    <a href="{{ url_for('ver_condominio', condominio_id=condominio.id) }}">Ver tela padrão (consulta ao vivo)</a>
+    ·
+    <a href="{{ url_for('arquivos_2via', condominio_id=condominio.id) }}">Gerenciar arquivos salvos</a>
+  </p>
+
+  <div class="filtros">
+    <label>
+      Mês de referência:
+      <input type="text" id="campo-mes-referencia" placeholder="ex: Setembro/2026" required>
+    </label>
+    <label>
+      Administradora:
+      <input type="text" id="campo-administradora" placeholder="ex: Administradora XYZ" value="{{ administradora_padrao }}" required>
+    </label>
+    <label>
+      Vencimento:
+      <input type="date" id="campo-vencimento" required>
+    </label>
+  </div>
+  <p class="muted">Preencha os campos acima antes de enviar — eles vão pro corpo do email.</p>
+
+  <form method="post" action="{{ url_for('enviar_massa_2via', condominio_id=condominio.id) }}"
+        id="form-enviar-massa">
+    <input type="hidden" name="mes_referencia" id="hidden-mes-referencia">
+    <input type="hidden" name="administradora" id="hidden-administradora">
+    <input type="hidden" name="vencimento" id="hidden-vencimento">
+    <button type="submit">Enviar boletos em massa</button>
+  </form>
+
+  <div class="filtros">
+    <label>
+      Unidade:
+      <input type="text" id="filtro-unidade" placeholder="ex: 01-LT-001">
+    </label>
+    <label>
+      Mês de vencimento:
+      <select id="filtro-mes">
+        <option value="">Todos</option>
+        {% for m in meses %}
+          <option value="{{ m }}" {% if m == mes_selecionado %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+
+  <p id="total-unidades" class="total-destaque"></p>
+
+  <table id="tabela-unidades">
+    <thead>
+      <tr>
+        <th>Unidade</th>
+        <th>Proprietário</th>
+        <th>Email</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in unidades if u.tem_boleto_2via %}
+        <tr data-unidade="{{ u.unidade|lower }}" data-mes="{{ u.vencimento_mes or '' }}">
+          <td>{{ u.unidade }}</td>
+          <td>
+            {{ u.proprietario }}
+            <a href="{{ url_for('editar_unidade', condominio_id=condominio.id, unidade=u.unidade, origem='2via') }}"
+               class="icone-editar" title="Editar nome e email da unidade">✏️</a>
+          </td>
+          <td>{{ u.email or "—" }}</td>
+          <td>
+            <a href="{{ url_for('ver_boleto_2via', condominio_id=condominio.id, unidade=u.unidade) }}" class="btn-ver-boleto">Ver boleto</a>
+            <form method="post" style="display:inline" class="form-enviar-unidade"
+                  action="{{ url_for('enviar_individual_2via', condominio_id=condominio.id, unidade=u.unidade) }}">
+              <button type="submit" class="btn-enviar-unidade">Enviar por email</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4">Nenhuma unidade com boleto de 2ª via salvo para este condomínio.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <script>
+    const filtroUnidade = document.getElementById('filtro-unidade');
+    const filtroMes = document.getElementById('filtro-mes');
+    const totalUnidades = document.getElementById('total-unidades');
+    const linhas = document.querySelectorAll('#tabela-unidades tbody tr[data-unidade]');
+
+    function aplicarFiltros() {
+      const unidade = filtroUnidade.value.trim().toLowerCase();
+      const mes = filtroMes.value;
+      let visiveis = 0;
+      linhas.forEach((tr) => {
+        const bateUnidade = !unidade || tr.dataset.unidade.includes(unidade);
+        const bateMes = !mes || tr.dataset.mes === mes;
+        const mostrar = bateUnidade && bateMes;
+        tr.hidden = !mostrar;
+        if (mostrar) visiveis++;
+      });
+      totalUnidades.textContent = `Exibindo ${visiveis} de ${linhas.length} unidades`;
+    }
+
+    filtroUnidade.addEventListener('input', aplicarFiltros);
+    filtroMes.addEventListener('change', aplicarFiltros);
+    aplicarFiltros();
+
+    const campoMesReferencia = document.getElementById('campo-mes-referencia');
+    const campoAdministradora = document.getElementById('campo-administradora');
+    const campoVencimento = document.getElementById('campo-vencimento');
+
+    function camposPreenchidos() {
+      if (!campoMesReferencia.value.trim() || !campoAdministradora.value.trim() || !campoVencimento.value) {
+        alert('Preencha o mês de referência, a administradora e o vencimento antes de enviar.');
+        return false;
+      }
+      return true;
+    }
+
+    async function enviarUnidade(form, { mostrarAlertaDeErro } = { mostrarAlertaDeErro: true }) {
+      const botao = form.querySelector('.btn-enviar-unidade');
+      const textoOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.classList.remove('btn-sucesso', 'btn-erro');
+      botao.textContent = 'Enviando...';
+
+      const params = new URLSearchParams({
+        mes_referencia: campoMesReferencia.value.trim(),
+        administradora: campoAdministradora.value.trim(),
+        vencimento: campoVencimento.value,
+      });
+
+      try {
+        const resp = await fetch(form.action + '?' + params.toString(), {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const dados = await resp.json();
+
+        if (resp.ok && dados.sucesso) {
+          botao.disabled = true;
+          botao.textContent = 'Boleto enviado';
+          botao.classList.add('btn-sucesso');
+          return true;
+        }
+        botao.disabled = false;
+        botao.textContent = 'Erro ao enviar';
+        botao.classList.add('btn-erro');
+        if (mostrarAlertaDeErro) alert(dados.mensagem || 'Falha ao enviar o email.');
+        return false;
+      } catch (err) {
+        botao.disabled = false;
+        botao.textContent = 'Erro ao enviar';
+        botao.classList.add('btn-erro');
+        if (mostrarAlertaDeErro) alert('Falha ao enviar o email: ' + err);
+        return false;
+      }
+    }
+
+    document.getElementById('form-enviar-massa').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      if (!camposPreenchidos()) return;
+      if (!confirm('Enviar boletos (2ª via) por email para todas as unidades com PDF salvo?')) return;
+
+      const formularios = document.querySelectorAll('.form-enviar-unidade');
+      for (const form of formularios) {
+        await enviarUnidade(form, { mostrarAlertaDeErro: false });
+      }
+    });
+
+    document.querySelectorAll('.form-enviar-unidade').forEach((form) => {
+      form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        if (!camposPreenchidos()) return;
+        enviarUnidade(form);
+      });
+    });
+  </script>
+{% endblock %}
