@@ -8,25 +8,41 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 
-SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
-SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 
-CONDOMOB_BASE_URL = os.environ["CONDOMOB_BASE_URL"].rstrip("/")
-CONDOMOB_ADMINISTRADORA_ID = os.environ["CONDOMOB_ADMINISTRADORA_ID"]
-CONDOMOB_AUTH_TOKEN = os.environ["CONDOMOB_AUTH_TOKEN"]
+def _env(nome, padrao=None):
+    """Lê uma variável de ambiente já removendo espaços/quebras de linha
+    acidentais (ex: um Enter sobrando ao colar o valor num painel como o de
+    Config Vars da Heroku, que quebra os headers HTTP)."""
+    valor = os.environ.get(nome, padrao)
+    return valor.strip() if isinstance(valor, str) else valor
 
-LOCAWEB_SMTP_URL = os.environ["LOCAWEB_SMTP_URL"]
-LOCAWEB_SMTP_TOKEN = os.environ["LOCAWEB_SMTP_TOKEN"]
-EMAIL_REMETENTE = os.environ["EMAIL_REMETENTE"]
-EMAIL_REMETENTE_NOME = os.environ.get("EMAIL_REMETENTE_NOME", EMAIL_REMETENTE)
 
-R2_ACCOUNT_ID = os.environ["R2_ACCOUNT_ID"]
-R2_ACCESS_KEY_ID = os.environ["R2_ACCESS_KEY_ID"]
-R2_SECRET_ACCESS_KEY = os.environ["R2_SECRET_ACCESS_KEY"]
-R2_BUCKET_NAME = os.environ["R2_BUCKET_NAME"]
+def _env_obrigatoria(nome):
+    valor = _env(nome)
+    if not valor:
+        raise RuntimeError(f"Variável de ambiente obrigatória não definida: {nome}")
+    return valor
+
+
+SUPABASE_URL = _env_obrigatoria("SUPABASE_URL").rstrip("/")
+SUPABASE_SERVICE_KEY = _env_obrigatoria("SUPABASE_SERVICE_KEY")
+
+CONDOMOB_BASE_URL = _env_obrigatoria("CONDOMOB_BASE_URL").rstrip("/")
+CONDOMOB_ADMINISTRADORA_ID = _env_obrigatoria("CONDOMOB_ADMINISTRADORA_ID")
+CONDOMOB_AUTH_TOKEN = _env_obrigatoria("CONDOMOB_AUTH_TOKEN")
+
+LOCAWEB_SMTP_URL = _env_obrigatoria("LOCAWEB_SMTP_URL")
+LOCAWEB_SMTP_TOKEN = _env_obrigatoria("LOCAWEB_SMTP_TOKEN")
+EMAIL_REMETENTE = _env_obrigatoria("EMAIL_REMETENTE")
+EMAIL_REMETENTE_NOME = _env("EMAIL_REMETENTE_NOME", EMAIL_REMETENTE)
+
+R2_ACCOUNT_ID = _env_obrigatoria("R2_ACCOUNT_ID")
+R2_ACCESS_KEY_ID = _env_obrigatoria("R2_ACCESS_KEY_ID")
+R2_SECRET_ACCESS_KEY = _env_obrigatoria("R2_SECRET_ACCESS_KEY")
+R2_BUCKET_NAME = _env_obrigatoria("R2_BUCKET_NAME")
 R2_ENDPOINT_URL = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
-FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "dev")
+FLASK_SECRET_KEY = _env("FLASK_SECRET_KEY", "dev")
 
 
 def load_condominios():
