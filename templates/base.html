@@ -8,6 +8,12 @@
 <body class="{% block body_class %}{% endblock %}">
   <header>
     <a href="{{ url_for('index') }}"><h1>Cobrança de Condomínios</h1></a>
+    {% if session.get('usuario_email') %}
+      <span class="sessao-usuario">
+        {{ session['usuario_email'] }} ·
+        <a href="{{ url_for('logout') }}">Sair</a>
+      </span>
+    {% endif %}
   </header>
   <main>
     {% with messages = get_flashed_messages(with_categories=true) %}

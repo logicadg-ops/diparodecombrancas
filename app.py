@@ -1,17 +1,51 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, abort
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, abort, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import config
-from services import condomob, email_service, r2_client, supabase_client
+from services import auth_client, condomob, email_service, r2_client, supabase_client
 
 app = Flask(__name__)
 app.secret_key = config.FLASK_SECRET_KEY
 # Atrás do proxy da Heroku (TLS termina lá), sem isso url_for(_external=True)
 # geraria links http:// em vez de https://.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+ROTAS_PUBLICAS = {"login", "static"}
+
+
+@app.before_request
+def exigir_login():
+    if request.endpoint in ROTAS_PUBLICAS or request.endpoint is None:
+        return
+    if not session.get("usuario_email"):
+        return redirect(url_for("login", next=request.path))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        senha = request.form.get("senha", "")
+        usuario = auth_client.login(email, senha)
+        if not usuario:
+            flash("Email ou senha inválidos.", "error")
+            return render_template("login.html")
+
+        session["usuario_email"] = usuario["email"]
+        destino = request.args.get("next") or url_for("index")
+        return redirect(destino)
+
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Você saiu do sistema.", "success")
+    return redirect(url_for("login"))
 
 
 def contato_da_unidade(unidade_row):

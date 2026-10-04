@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Entrar{% endblock %}
+{% block content %}
+  <div class="cartao" style="max-width: 360px; margin: 3rem auto;">
+    <h2>Entrar</h2>
+    <form method="post" class="form-coluna">
+      <label>
+        Email:
+        <input type="email" name="email" required autofocus>
+      </label>
+      <label>
+        Senha:
+        <input type="password" name="senha" required>
+      </label>
+      <button type="submit">Entrar</button>
+    </form>
+  </div>
+{% endblock %}
