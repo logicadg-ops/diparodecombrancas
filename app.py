@@ -13,7 +13,13 @@ app.secret_key = config.FLASK_SECRET_KEY
 # geraria links http:// em vez de https://.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
-ROTAS_PUBLICAS = {"login", "static"}
+ROTAS_PUBLICAS = {
+    "login",
+    "static",
+    # Link clicado pelo morador a partir do email — ele não está (e não
+    # deve precisar estar) logado no sistema.
+    "boleto_2via_arquivo",
+}
 
 
 @app.before_request
