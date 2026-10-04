@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{% if modo == "nova" %}Nova unidade{% else %}Editar unidade{% endif %}{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('listar_unidades_cadastro', condominio_id=condominio.id) }}">&larr; Unidades — {{ condominio.nome }}</a></p>
+  <h2>{% if modo == "nova" %}Nova unidade{% else %}Editar unidade {{ unidade.unidade }}{% endif %}</h2>
+
+  <div class="cartao">
+    <form method="post" class="form-coluna">
+      <h3>Unidade</h3>
+      <label>Código da unidade *:
+        <input type="text" name="unidade" value="{{ unidade.unidade or '' }}" required class="input-largo">
+      </label>
+      <label>Bloco:
+        <input type="text" name="bloco" value="{{ unidade.bloco or '' }}">
+      </label>
+      <label>Apto:
+        <input type="text" name="apto" value="{{ unidade.apto or '' }}">
+      </label>
+      <label>
+        <span><input type="checkbox" name="alugado" {% if unidade.alugado %}checked{% endif %}> Unidade alugada</span>
+      </label>
+
+      <h3>Proprietário</h3>
+      <label>Nome:
+        <input type="text" name="proprietario" value="{{ unidade.proprietario or '' }}" class="input-largo">
+      </label>
+      <label>CPF/CNPJ:
+        <input type="text" name="cpfcnpj" value="{{ unidade.cpfcnpj or '' }}">
+      </label>
+      <label>RG:
+        <input type="text" name="rg" value="{{ unidade.rg or '' }}">
+      </label>
+      <label>Email (use ; pra vários):
+        <input type="text" name="email" value="{{ unidade.email or '' }}" class="input-largo">
+      </label>
+      <label>Telefone 1:
+        <input type="text" name="fone1" value="{{ unidade.fone1 or '' }}">
+      </label>
+      <label>Telefone 2:
+        <input type="text" name="fone2" value="{{ unidade.fone2 or '' }}">
+      </label>
+
+      <h3>Inquilino</h3>
+      <label>Nome:
+        <input type="text" name="inquilono" value="{{ unidade.inquilono or '' }}" class="input-largo">
+      </label>
+      <label>CPF/CNPJ:
+        <input type="text" name="inquilonocpfcnpj" value="{{ unidade.inquilonocpfcnpj or '' }}">
+      </label>
+      <label>Email:
+        <input type="text" name="inquilinoemail" value="{{ unidade.inquilinoemail or '' }}" class="input-largo">
+      </label>
+      <label>Telefone 1:
+        <input type="text" name="inquilinofone1" value="{{ unidade.inquilinofone1 or '' }}">
+      </label>
+      <label>Telefone 2:
+        <input type="text" name="inquilinofone2" value="{{ unidade.inquilinofone2 or '' }}">
+      </label>
+
+      <button type="submit">Salvar</button>
+    </form>
+  </div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Unidades - {{ condominio.nome }}{% endblock %}
+{% block body_class %}pagina-larga{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('listar_condominios') }}">&larr; Cadastro de Condomínios</a></p>
+  <h2>
+    Unidades — {{ condominio.nome }}
+  </h2>
+
+  <div class="filtros">
+    <a href="{{ url_for('nova_unidade_cadastro', condominio_id=condominio.id) }}" class="btn-ver-boleto">+ Nova unidade</a>
+    <a href="{{ url_for('importar_unidades', condominio_id=condominio.id) }}" class="btn-ver-boleto">Importar planilha (Excel)</a>
+    <a href="{{ url_for('modelo_unidades', condominio_id=condominio.id) }}" class="muted">Baixar modelo da planilha</a>
+  </div>
+
+  <p class="total-destaque">{{ unidades|length }} unidade(s) cadastrada(s)</p>
+
+  <table class="tabela-arquivos">
+    <thead>
+      <tr>
+        <th>Unidade</th>
+        <th>Bloco</th>
+        <th>Apto</th>
+        <th>Proprietário</th>
+        <th>Email</th>
+        <th>Alugada</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in unidades %}
+        <tr>
+          <td>{{ u.unidade or "—" }}</td>
+          <td>{{ u.bloco or "—" }}</td>
+          <td>{{ u.apto or "—" }}</td>
+          <td>{{ u.proprietario or "—" }}</td>
+          <td>{{ u.email or "—" }}</td>
+          <td>{{ "Sim" if u.alugado else "Não" }}</td>
+          <td>
+            <a href="{{ url_for('editar_unidade_cadastro', condominio_id=condominio.id, id_unidade=u.id) }}"
+               class="icone-editar" title="Editar unidade">✏️</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7">Nenhuma unidade cadastrada. Use "+ Nova unidade" ou importe uma planilha.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

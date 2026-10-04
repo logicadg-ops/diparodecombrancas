@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Importar unidades - {{ condominio.nome }}{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('listar_unidades_cadastro', condominio_id=condominio.id) }}">&larr; Unidades — {{ condominio.nome }}</a></p>
+  <h2>Importar unidades por planilha</h2>
+
+  <div class="cartao">
+    <p class="muted">
+      Use o <a href="{{ url_for('modelo_unidades', condominio_id=condominio.id) }}">modelo de planilha</a>.
+      A primeira linha deve conter os nomes das colunas. A coluna <strong>unidade</strong> é obrigatória.
+    </p>
+    <p class="muted">
+      <strong>Regras:</strong> se a unidade já existe neste condomínio, ela é <strong>atualizada</strong>;
+      se não existe, é <strong>criada</strong>. Células em branco <strong>não apagam</strong> dados já cadastrados.
+      Em "alugado", use sim ou não.
+    </p>
+    <form method="post" enctype="multipart/form-data" class="form-coluna">
+      <input type="file" name="planilha" accept=".xlsx" required>
+      <label>
+        <span><input type="checkbox" name="simular" checked> Apenas simular (não grava nada, só mostra o que aconteceria)</span>
+      </label>
+      <button type="submit">Processar planilha</button>
+    </form>
+  </div>
+
+  {% if relatorio %}
+    <div class="cartao">
+      <h3>
+        {% if relatorio.aplicado %}Importação aplicada{% elif relatorio.simulado %}Simulação (nada foi gravado){% else %}Não aplicado{% endif %}
+      </h3>
+      <p>
+        <strong>{{ relatorio.criar }}</strong> unidade(s) a criar ·
+        <strong>{{ relatorio.atualizar }}</strong> a atualizar ·
+        <strong>{{ relatorio.sem_alteracao }}</strong> sem alteração
+      </p>
+
+      {% if relatorio.erros %}
+        <p class="flash-error">Corrija os erros abaixo e envie a planilha de novo. Nenhuma alteração foi feita.</p>
+        <ul>{% for e in relatorio.erros %}<li>{{ e }}</li>{% endfor %}</ul>
+      {% endif %}
+
+      {% if relatorio.avisos %}
+        <ul class="muted">{% for a in relatorio.avisos %}<li>{{ a }}</li>{% endfor %}</ul>
+      {% endif %}
+
+      {% if relatorio.amostra_criar %}
+        <p><strong>Serão criadas:</strong> {{ relatorio.amostra_criar|join(", ") }}{% if relatorio.criar > relatorio.amostra_criar|length %} (e mais {{ relatorio.criar - relatorio.amostra_criar|length }}){% endif %}</p>
+      {% endif %}
+      {% if relatorio.amostra_atualizar %}
+        <p><strong>Serão atualizadas:</strong> {{ relatorio.amostra_atualizar|join(", ") }}{% if relatorio.atualizar > relatorio.amostra_atualizar|length %} (e mais {{ relatorio.atualizar - relatorio.amostra_atualizar|length }}){% endif %}</p>
+      {% endif %}
+
+      {% if relatorio.simulado and not relatorio.erros %}
+        <p class="muted">Se estiver tudo certo, envie a mesma planilha de novo com "Apenas simular" desmarcado.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

@@ -1,14 +1,15 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, abort, session
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, abort, session, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import config
-from services import auth_client, condomob, email_service, r2_client, supabase_client
+from services import auth_client, condomob, email_service, importacao_unidades, r2_client, supabase_client
 
 app = Flask(__name__)
 app.secret_key = config.FLASK_SECRET_KEY
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 # Atrás do proxy da Heroku (TLS termina lá), sem isso url_for(_external=True)
 # geraria links http:// em vez de https://.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
@@ -236,6 +237,123 @@ def excluir_condominio(id_interno):
     supabase_client.excluir_condominio(id_interno)
     flash("Condomínio excluído.", "success")
     return redirect(url_for("listar_condominios"))
+
+
+def _dados_unidade_do_formulario():
+    dados = {}
+    for campo in importacao_unidades.CAMPOS_TEXTO:
+        dados[campo] = request.form.get(campo, "").strip() or None
+    dados[importacao_unidades.CAMPO_BOOLEANO] = request.form.get("alugado") == "on"
+    return dados
+
+
+@app.route("/condominios/<int:condominio_id>/unidades")
+def listar_unidades_cadastro(condominio_id):
+    condominio = supabase_client.get_condominio(condominio_id)
+    if not condominio:
+        flash("Condomínio não encontrado.", "error")
+        return redirect(url_for("listar_condominios"))
+    unidades = supabase_client.get_unidades(condominio_id)
+    return render_template("unidades_cadastro.html", condominio=condominio, unidades=unidades)
+
+
+@app.route("/condominios/<int:condominio_id>/unidades/modelo.xlsx")
+def modelo_unidades(condominio_id):
+    conteudo = importacao_unidades.gerar_modelo()
+    return Response(
+        conteudo,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=modelo_unidades.xlsx"},
+    )
+
+
+@app.route("/condominios/<int:condominio_id>/unidades/nova", methods=["GET", "POST"])
+def nova_unidade_cadastro(condominio_id):
+    condominio = supabase_client.get_condominio(condominio_id)
+    if not condominio:
+        flash("Condomínio não encontrado.", "error")
+        return redirect(url_for("listar_condominios"))
+
+    if request.method == "POST":
+        dados = _dados_unidade_do_formulario()
+        if not dados["unidade"]:
+            flash("O código da unidade é obrigatório.", "error")
+            return render_template(
+                "unidade_form.html", condominio=condominio, unidade=dados, modo="nova"
+            )
+        dados["id_condominio"] = condominio_id
+        dados["nome_condominio"] = condominio["nome"]
+        supabase_client.criar_unidades([dados])
+        flash(f"Unidade {dados['unidade']} cadastrada.", "success")
+        return redirect(url_for("listar_unidades_cadastro", condominio_id=condominio_id))
+
+    return render_template("unidade_form.html", condominio=condominio, unidade={}, modo="nova")
+
+
+@app.route("/condominios/<int:condominio_id>/unidades/<int:id_unidade>/editar", methods=["GET", "POST"])
+def editar_unidade_cadastro(condominio_id, id_unidade):
+    condominio = supabase_client.get_condominio(condominio_id)
+    unidade = supabase_client.get_unidade_por_id(id_unidade)
+    if not condominio or not unidade or unidade.get("id_condominio") != condominio_id:
+        flash("Unidade não encontrada.", "error")
+        return redirect(url_for("listar_unidades_cadastro", condominio_id=condominio_id))
+
+    if request.method == "POST":
+        dados = _dados_unidade_do_formulario()
+        if not dados["unidade"]:
+            flash("O código da unidade é obrigatório.", "error")
+            return render_template(
+                "unidade_form.html", condominio=condominio,
+                unidade={**unidade, **dados}, modo="editar",
+            )
+        supabase_client.atualizar_unidade_por_id(id_unidade, dados)
+        flash(f"Unidade {dados['unidade']} atualizada.", "success")
+        return redirect(url_for("listar_unidades_cadastro", condominio_id=condominio_id))
+
+    return render_template("unidade_form.html", condominio=condominio, unidade=unidade, modo="editar")
+
+
+@app.route("/condominios/<int:condominio_id>/unidades/importar", methods=["GET", "POST"])
+def importar_unidades(condominio_id):
+    condominio = supabase_client.get_condominio(condominio_id)
+    if not condominio:
+        flash("Condomínio não encontrado.", "error")
+        return redirect(url_for("listar_condominios"))
+
+    if request.method == "GET":
+        return render_template("unidades_importar.html", condominio=condominio, relatorio=None)
+
+    arquivo = request.files.get("planilha")
+    if not arquivo or not arquivo.filename.lower().endswith(".xlsx"):
+        flash("Envie uma planilha .xlsx.", "error")
+        return redirect(url_for("importar_unidades", condominio_id=condominio_id))
+
+    simular = request.form.get("simular") == "on"
+    linhas, erros_formato, avisos = importacao_unidades.ler_planilha(arquivo.stream)
+    unidades_existentes = supabase_client.get_unidades(condominio_id)
+    plano = importacao_unidades.planejar(
+        condominio_id, condominio["nome"], linhas, unidades_existentes
+    )
+    erros = erros_formato + plano["erros"]
+
+    aplicado = False
+    if not simular and not erros:
+        importacao_unidades.aplicar(plano)
+        aplicado = True
+        flash("Importação aplicada no cadastro.", "success")
+
+    relatorio = {
+        "simulado": simular,
+        "aplicado": aplicado,
+        "criar": len(plano["criar"]),
+        "atualizar": len(plano["atualizar"]),
+        "sem_alteracao": len(plano["sem_alteracao"]),
+        "amostra_criar": [d["unidade"] for d in plano["criar"][:50]],
+        "amostra_atualizar": [item["unidade"] for item in plano["atualizar"][:50]],
+        "avisos": avisos,
+        "erros": erros,
+    }
+    return render_template("unidades_importar.html", condominio=condominio, relatorio=relatorio)
 
 
 @app.route("/condominio/<int:condominio_id>")

@@ -158,6 +158,51 @@ def get_unidade(condominio_id, unidade):
     return rows[0] if rows else None
 
 
+def get_unidade_por_id(id_unidade):
+    resp = requests.get(
+        f"{config.SUPABASE_URL}/rest/v1/unidades",
+        headers=_headers(),
+        params={"id": f"eq.{id_unidade}", "select": "*", "limit": 1},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    rows = resp.json()
+    return rows[0] if rows else None
+
+
+def criar_unidades(lista_dados):
+    if not lista_dados:
+        return
+    resp = requests.post(
+        f"{config.SUPABASE_URL}/rest/v1/unidades",
+        headers={**_headers(), "Content-Type": "application/json"},
+        json=lista_dados,
+        timeout=30,
+    )
+    resp.raise_for_status()
+
+
+def atualizar_unidade_por_id(id_unidade, dados):
+    resp = requests.patch(
+        f"{config.SUPABASE_URL}/rest/v1/unidades",
+        headers={**_headers(), "Content-Type": "application/json"},
+        params={"id": f"eq.{id_unidade}"},
+        json=dados,
+        timeout=15,
+    )
+    resp.raise_for_status()
+
+
+def excluir_unidade_por_id(id_unidade):
+    resp = requests.delete(
+        f"{config.SUPABASE_URL}/rest/v1/unidades",
+        headers=_headers(),
+        params={"id": f"eq.{id_unidade}"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+
+
 def atualizar_unidade(condominio_id, unidade, proprietario, email, fone1=None, fone2=None):
     """Atualiza nome do proprietário, email e telefones de uma unidade. Se
     houver registros duplicados pra essa unidade (condominio_id + unidade),

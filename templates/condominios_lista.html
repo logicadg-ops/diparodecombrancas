@@ -28,6 +28,7 @@
           <td>{{ c.status or "—" }}</td>
           <td>
             <a href="{{ url_for('editar_condominio', id_interno=c.id) }}" class="icone-editar" title="Editar">✏️</a>
+            <a href="{{ url_for('listar_unidades_cadastro', condominio_id=c.idcontominio) }}" class="btn-ver-boleto">Unidades</a>
             <form method="post" style="display:inline"
                   action="{{ url_for('excluir_condominio', id_interno=c.id) }}"
                   onsubmit="return confirm('Excluir o condomínio \'{{ c.ds_condominio }}\'? Essa ação não pode ser desfeita.');">
