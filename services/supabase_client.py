@@ -34,6 +34,71 @@ def get_condominios():
     ]
 
 
+def listar_condominios_cadastro():
+    """Retorna os condomínios com os campos usados na tela de cadastro
+    (inclui o `id` interno, usado nas rotas de editar/excluir)."""
+    resp = requests.get(
+        f"{config.SUPABASE_URL}/rest/v1/condominio",
+        headers=_headers(),
+        params={
+            "select": "id,idcontominio,ds_condominio,cnpj,cidade,uf,status,unidades",
+            "order": "ds_condominio",
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_condominio_cadastro(id_interno):
+    """Retorna um condomínio pelo `id` interno (chave primária da tabela),
+    usado na tela de edição do cadastro."""
+    resp = requests.get(
+        f"{config.SUPABASE_URL}/rest/v1/condominio",
+        headers=_headers(),
+        params={
+            "id": f"eq.{id_interno}",
+            "select": "id,idcontominio,ds_condominio,cnpj,endereco,end_numero,bairro,cidade,uf,status",
+            "limit": 1,
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    rows = resp.json()
+    return rows[0] if rows else None
+
+
+def criar_condominio(dados):
+    resp = requests.post(
+        f"{config.SUPABASE_URL}/rest/v1/condominio",
+        headers={**_headers(), "Content-Type": "application/json"},
+        json=dados,
+        timeout=15,
+    )
+    resp.raise_for_status()
+
+
+def atualizar_condominio(id_interno, dados):
+    resp = requests.patch(
+        f"{config.SUPABASE_URL}/rest/v1/condominio",
+        headers={**_headers(), "Content-Type": "application/json"},
+        params={"id": f"eq.{id_interno}"},
+        json=dados,
+        timeout=15,
+    )
+    resp.raise_for_status()
+
+
+def excluir_condominio(id_interno):
+    resp = requests.delete(
+        f"{config.SUPABASE_URL}/rest/v1/condominio",
+        headers=_headers(),
+        params={"id": f"eq.{id_interno}"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+
+
 def get_condominio(condominio_id):
     """Retorna um único condomínio pelo id da Condomob (idcontominio)."""
     resp = requests.get(

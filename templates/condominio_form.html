@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{% if modo == "novo" %}Novo condomínio{% else %}Editar condomínio{% endif %}{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('listar_condominios') }}">&larr; Cadastro de Condomínios</a></p>
+  <h2>{% if modo == "novo" %}Novo condomínio{% else %}Editar condomínio{% endif %}</h2>
+
+  <div class="cartao">
+    <form method="post" class="form-coluna">
+      <label>
+        ID na Condomob:
+        {% if modo == "novo" %}
+          <input type="text" name="idcontominio" value="{{ condominio.idcontominio or '' }}"
+                 placeholder="ex: 5473528838094848" required class="input-largo">
+        {% else %}
+          <input type="text" value="{{ condominio.idcontominio }}" disabled class="input-largo">
+          <span class="muted">O ID não pode ser alterado depois de criado.</span>
+        {% endif %}
+      </label>
+      <label>
+        Nome:
+        <input type="text" name="ds_condominio" value="{{ condominio.ds_condominio or '' }}" required class="input-largo">
+      </label>
+      <label>
+        CNPJ:
+        <input type="text" name="cnpj" value="{{ condominio.cnpj or '' }}" class="input-largo">
+      </label>
+      <label>
+        Endereço:
+        <input type="text" name="endereco" value="{{ condominio.endereco or '' }}" class="input-largo">
+      </label>
+      <label>
+        Número:
+        <input type="text" name="end_numero" value="{{ condominio.end_numero or '' }}">
+      </label>
+      <label>
+        Bairro:
+        <input type="text" name="bairro" value="{{ condominio.bairro or '' }}" class="input-largo">
+      </label>
+      <label>
+        Cidade:
+        <input type="text" name="cidade" value="{{ condominio.cidade or '' }}" class="input-largo">
+      </label>
+      <label>
+        UF:
+        <input type="text" name="uf" value="{{ condominio.uf or '' }}" maxlength="2" style="width: 60px; text-transform: uppercase;">
+      </label>
+      <label>
+        Status:
+        <select name="status">
+          <option value="ATIVO" {% if condominio.status == "ATIVO" %}selected{% endif %}>ATIVO</option>
+          <option value="INATIVO" {% if condominio.status == "INATIVO" %}selected{% endif %}>INATIVO</option>
+        </select>
+      </label>
+      <button type="submit">Salvar</button>
+    </form>
+  </div>
+{% endblock %}

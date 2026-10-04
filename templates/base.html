@@ -15,6 +15,12 @@
       </span>
     {% endif %}
   </header>
+  {% if session.get('usuario_email') %}
+    <nav class="menu-principal">
+      <a href="{{ url_for('index') }}">Enviar boletos</a>
+      <a href="{{ url_for('listar_condominios') }}">Cadastro de Condomínios</a>
+    </nav>
+  {% endif %}
   <main>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}

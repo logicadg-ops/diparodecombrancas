@@ -165,6 +165,79 @@ def index():
     )
 
 
+@app.route("/condominios")
+def listar_condominios():
+    condominios = supabase_client.listar_condominios_cadastro()
+    return render_template("condominios_lista.html", condominios=condominios)
+
+
+@app.route("/condominios/novo", methods=["GET", "POST"])
+def novo_condominio():
+    if request.method == "POST":
+        idcontominio_bruto = request.form.get("idcontominio", "").strip()
+        nome = request.form.get("ds_condominio", "").strip()
+        dados_form = {"idcontominio": idcontominio_bruto, "ds_condominio": nome}
+
+        if not idcontominio_bruto.isdigit() or not nome:
+            flash("ID (Condomob) precisa ser numérico, e o nome é obrigatório.", "error")
+            return render_template("condominio_form.html", condominio=dados_form, modo="novo")
+
+        dados = {
+            "idcontominio": int(idcontominio_bruto),
+            "ds_condominio": nome,
+            "cnpj": request.form.get("cnpj", "").strip() or None,
+            "endereco": request.form.get("endereco", "").strip() or None,
+            "end_numero": request.form.get("end_numero", "").strip() or None,
+            "bairro": request.form.get("bairro", "").strip() or None,
+            "cidade": request.form.get("cidade", "").strip() or None,
+            "uf": request.form.get("uf", "").strip() or None,
+            "status": request.form.get("status", "ATIVO").strip(),
+        }
+        supabase_client.criar_condominio(dados)
+        flash(f"Condomínio \"{dados['ds_condominio']}\" cadastrado.", "success")
+        return redirect(url_for("listar_condominios"))
+
+    return render_template("condominio_form.html", condominio={}, modo="novo")
+
+
+@app.route("/condominios/<int:id_interno>/editar", methods=["GET", "POST"])
+def editar_condominio(id_interno):
+    condominio = supabase_client.get_condominio_cadastro(id_interno)
+    if not condominio:
+        flash("Condomínio não encontrado.", "error")
+        return redirect(url_for("listar_condominios"))
+
+    if request.method == "POST":
+        dados = {
+            "ds_condominio": request.form.get("ds_condominio", "").strip(),
+            "cnpj": request.form.get("cnpj", "").strip() or None,
+            "endereco": request.form.get("endereco", "").strip() or None,
+            "end_numero": request.form.get("end_numero", "").strip() or None,
+            "bairro": request.form.get("bairro", "").strip() or None,
+            "cidade": request.form.get("cidade", "").strip() or None,
+            "uf": request.form.get("uf", "").strip() or None,
+            "status": request.form.get("status", "ATIVO").strip(),
+        }
+        if not dados["ds_condominio"]:
+            flash("Nome é obrigatório.", "error")
+            return render_template(
+                "condominio_form.html", condominio={**condominio, **dados}, modo="editar"
+            )
+
+        supabase_client.atualizar_condominio(id_interno, dados)
+        flash(f"Condomínio \"{dados['ds_condominio']}\" atualizado.", "success")
+        return redirect(url_for("listar_condominios"))
+
+    return render_template("condominio_form.html", condominio=condominio, modo="editar")
+
+
+@app.route("/condominios/<int:id_interno>/excluir", methods=["POST"])
+def excluir_condominio(id_interno):
+    supabase_client.excluir_condominio(id_interno)
+    flash("Condomínio excluído.", "success")
+    return redirect(url_for("listar_condominios"))
+
+
 @app.route("/condominio/<int:condominio_id>")
 def ver_condominio(condominio_id):
     condominio = supabase_client.get_condominio(condominio_id)
