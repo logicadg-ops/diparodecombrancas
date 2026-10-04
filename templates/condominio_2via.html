@@ -13,6 +13,25 @@
 
   <div class="filtros">
     <label>
+      Trocar de condomínio:
+      <select id="seletor-condominio">
+        {% for c in condominios %}
+          <option value="{{ c.id }}" {% if c.id == condominio.id %}selected{% endif %}>
+            {{ c.nome }}{% if c.status %} ({{ c.status }}){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <script>
+    document.getElementById('seletor-condominio').addEventListener('change', (ev) => {
+      const baseUrl = "{{ url_for('ver_condominio_2via', condominio_id=0) }}";
+      window.location.href = baseUrl.replace('/0', '/' + ev.target.value);
+    });
+  </script>
+
+  <div class="filtros">
+    <label>
       Mês de referência:
       <input type="text" id="campo-mes-referencia" placeholder="ex: Setembro/2026" required>
     </label>

@@ -255,6 +255,7 @@ def ver_condominio(condominio_id):
         unidades=unidades,
         meses=meses,
         mes_selecionado=mes_selecionado,
+        condominios=supabase_client.get_condominios(),
     )
 
 
@@ -463,6 +464,7 @@ def ver_condominio_2via(condominio_id):
         meses=meses,
         mes_selecionado=mes_selecionado,
         administradora_padrao=config.EMAIL_REMETENTE_NOME,
+        condominios=supabase_client.get_condominios(),
     )
 
 

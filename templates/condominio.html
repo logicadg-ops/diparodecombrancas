@@ -8,6 +8,25 @@
     <a href="{{ url_for('ver_condominio_2via', condominio_id=condominio.id) }}">Ver boletos 2ª via (arquivos salvos)</a>
   </p>
 
+  <div class="filtros">
+    <label>
+      Trocar de condomínio:
+      <select id="seletor-condominio">
+        {% for c in condominios %}
+          <option value="{{ c.id }}" {% if c.id == condominio.id %}selected{% endif %}>
+            {{ c.nome }}{% if c.status %} ({{ c.status }}){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <script>
+    document.getElementById('seletor-condominio').addEventListener('change', (ev) => {
+      const baseUrl = "{{ url_for('ver_condominio', condominio_id=0) }}";
+      window.location.href = baseUrl.replace('/0', '/' + ev.target.value);
+    });
+  </script>
+
   <form id="form-enviar-massa">
     <button type="submit">Enviar boletos em massa</button>
   </form>
