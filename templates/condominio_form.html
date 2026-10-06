@@ -21,6 +21,11 @@
         <input type="text" name="ds_condominio" value="{{ condominio.ds_condominio or '' }}" required class="input-largo">
       </label>
       <label>
+        Número de unidades:
+        <input type="text" name="unidades" value="{{ condominio.unidades if condominio.unidades is not none else '' }}"
+               inputmode="numeric" style="width: 120px;">
+      </label>
+      <label>
         CNPJ:
         <input type="text" name="cnpj" value="{{ condominio.cnpj or '' }}" class="input-largo">
       </label>

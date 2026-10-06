@@ -58,7 +58,7 @@ def get_condominio_cadastro(id_interno):
         headers=_headers(),
         params={
             "id": f"eq.{id_interno}",
-            "select": "id,idcontominio,ds_condominio,cnpj,endereco,end_numero,bairro,cidade,uf,status",
+            "select": "id,idcontominio,ds_condominio,cnpj,endereco,end_numero,bairro,cidade,uf,status,unidades",
             "limit": 1,
         },
         timeout=15,

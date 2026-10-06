@@ -183,9 +183,16 @@ def novo_condominio():
             flash("ID (Condomob) precisa ser numérico, e o nome é obrigatório.", "error")
             return render_template("condominio_form.html", condominio=dados_form, modo="novo")
 
+        unidades_bruto = request.form.get("unidades", "").strip()
+        if unidades_bruto and not unidades_bruto.isdigit():
+            flash("Número de unidades precisa ser um número inteiro.", "error")
+            return render_template(
+                "condominio_form.html", condominio=dict(request.form), modo="novo"
+            )
         dados = {
             "idcontominio": int(idcontominio_bruto),
             "ds_condominio": nome,
+            "unidades": int(unidades_bruto) if unidades_bruto else None,
             "cnpj": request.form.get("cnpj", "").strip() or None,
             "endereco": request.form.get("endereco", "").strip() or None,
             "end_numero": request.form.get("end_numero", "").strip() or None,
@@ -209,8 +216,15 @@ def editar_condominio(id_interno):
         return redirect(url_for("listar_condominios"))
 
     if request.method == "POST":
+        unidades_bruto = request.form.get("unidades", "").strip()
+        if unidades_bruto and not unidades_bruto.isdigit():
+            flash("Número de unidades precisa ser um número inteiro.", "error")
+            return render_template(
+                "condominio_form.html", condominio={**condominio, **request.form.to_dict()}, modo="editar"
+            )
         dados = {
             "ds_condominio": request.form.get("ds_condominio", "").strip(),
+            "unidades": int(unidades_bruto) if unidades_bruto else None,
             "cnpj": request.form.get("cnpj", "").strip() or None,
             "endereco": request.form.get("endereco", "").strip() or None,
             "end_numero": request.form.get("end_numero", "").strip() or None,
