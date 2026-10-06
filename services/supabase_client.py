@@ -173,6 +173,8 @@ def get_unidade_por_id(id_unidade):
 def criar_unidades(lista_dados):
     if not lista_dados:
         return
+    colunas = set().union(*(d.keys() for d in lista_dados))
+    lista_dados = [{c: d.get(c) for c in colunas} for d in lista_dados]
     resp = requests.post(
         f"{config.SUPABASE_URL}/rest/v1/unidades",
         headers={**_headers(), "Content-Type": "application/json"},
