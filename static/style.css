@@ -312,6 +312,41 @@ body.tela-condominio .btn-enviar-unidade.btn-sucesso:hover { background: var(--v
 body.tela-condominio .btn-enviar-unidade.btn-erro,
 body.tela-condominio .btn-enviar-unidade.btn-erro:hover { background: var(--vermelho); }
 
+body.tela-cadastro .cad-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+body.tela-cadastro a.ct-btn-massa { text-decoration: none; display: inline-block; }
+body.tela-cadastro .ct-subtitulo { font-family: "Fraunces", Georgia, serif; font-style: italic; color: var(--tinta); font-size: 1rem; }
+body.tela-cadastro .cad-status {
+  display: inline-block;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  color: var(--cinza-texto);
+}
+body.tela-cadastro .cad-status-ativo { color: var(--verde); }
+body.tela-cadastro .cad-status-inativo { color: var(--vermelho); }
+body.tela-cadastro .cad-form-excluir { display: inline-block; margin-left: 0.5rem; }
+body.tela-cadastro .cad-btn-excluir {
+  background: transparent;
+  color: var(--vermelho);
+  border: 1.5px solid var(--vermelho);
+  border-radius: 2px;
+  padding: 0.4rem 0.8rem;
+  font: 600 0.82rem "IBM Plex Sans", system-ui, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+body.tela-cadastro .cad-btn-excluir:hover { background: var(--vermelho); color: #fffdf8; }
+
 @media (max-width: 700px) {
   body.tela-condominio main { padding: 1.5rem 1rem 3rem; }
   body.tela-condominio .ct-form-massa { margin-left: 0; width: 100%; }

@@ -1,44 +1,55 @@
 {% extends "base.html" %}
 {% block title %}Cadastro de Condomínios{% endblock %}
-{% block body_class %}pagina-larga{% endblock %}
+{% block body_class %}pagina-larga tela-condominio tela-cadastro{% endblock %}
+{% block head_extra %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+{% endblock %}
 {% block content %}
-  <h2>
-    Cadastro de Condomínios
-    <a href="{{ url_for('novo_condominio') }}" class="btn-ver-boleto btn-titulo">+ Novo condomínio</a>
-  </h2>
+  <section class="ct-cabecalho">
+    <p class="ct-eyebrow">Administração · Cadastro</p>
+    <div class="cad-topo">
+      <h2 class="ct-titulo">Cadastro de Condomínios</h2>
+      <a href="{{ url_for('novo_condominio') }}" class="ct-btn-massa">+ Novo condomínio</a>
+    </div>
+    <p class="ct-subtitulo">{{ condominios|length }} condomínio(s) cadastrado(s)</p>
+  </section>
 
-  <table class="tabela-arquivos">
-    <thead>
-      <tr>
-        <th>ID (Condomob)</th>
-        <th>Nome</th>
-        <th>Cidade/UF</th>
-        <th>Unidades</th>
-        <th>Status</th>
-        <th>Ações</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for c in condominios %}
+  <div class="ct-tabela-wrap">
+    <table>
+      <thead>
         <tr>
-          <td>{{ c.idcontominio }}</td>
-          <td>{{ c.ds_condominio }}</td>
-          <td>{{ c.cidade or "—" }}{% if c.uf %}/{{ c.uf }}{% endif %}</td>
-          <td>{{ c.unidades or "—" }}</td>
-          <td>{{ c.status or "—" }}</td>
-          <td>
-            <a href="{{ url_for('editar_condominio', id_interno=c.id) }}" class="icone-editar" title="Editar">✏️</a>
-            <a href="{{ url_for('listar_unidades_cadastro', condominio_id=c.idcontominio) }}" class="btn-ver-boleto">Unidades</a>
-            <form method="post" style="display:inline"
-                  action="{{ url_for('excluir_condominio', id_interno=c.id) }}"
-                  onsubmit="return confirm('Excluir o condomínio \'{{ c.ds_condominio }}\'? Essa ação não pode ser desfeita.');">
-              <button type="submit" class="btn-excluir">Excluir</button>
-            </form>
-          </td>
+          <th>ID (Condomob)</th>
+          <th>Nome</th>
+          <th>Cidade/UF</th>
+          <th>Unidades</th>
+          <th>Status</th>
+          <th>Ações</th>
         </tr>
-      {% else %}
-        <tr><td colspan="6">Nenhum condomínio cadastrado ainda.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for c in condominios %}
+          <tr>
+            <td class="ct-codigo">{{ c.idcontominio }}</td>
+            <td class="ct-nome">{{ c.ds_condominio }}</td>
+            <td>{{ c.cidade or "—" }}{% if c.uf %}/{{ c.uf }}{% endif %}</td>
+            <td class="ct-codigo">{{ c.unidades or "—" }}</td>
+            <td><span class="cad-status cad-status-{{ (c.status or 'NONE')|lower }}">{{ c.status or "—" }}</span></td>
+            <td class="ct-acoes">
+              <a href="{{ url_for('editar_condominio', id_interno=c.id) }}" class="icone-editar" title="Editar">✏️</a>
+              <a href="{{ url_for('listar_unidades_cadastro', condominio_id=c.idcontominio) }}" class="btn-ver-boleto">Unidades</a>
+              <form method="post" class="cad-form-excluir"
+                    action="{{ url_for('excluir_condominio', id_interno=c.id) }}"
+                    onsubmit="return confirm('Excluir o condomínio \'{{ c.ds_condominio }}\'? Essa ação não pode ser desfeita.');">
+                <button type="submit" class="cad-btn-excluir">Excluir</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="ct-vazio">Nenhum condomínio cadastrado ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 {% endblock %}
