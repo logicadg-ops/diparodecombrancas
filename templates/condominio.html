@@ -1,88 +1,99 @@
 {% extends "base.html" %}
 {% block title %}{{ condominio.nome }}{% endblock %}
-{% block body_class %}pagina-larga{% endblock %}
+{% block body_class %}pagina-larga tela-condominio{% endblock %}
+{% block head_extra %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+{% endblock %}
 {% block content %}
-  <p><a href="{{ url_for('index') }}">&larr; Condomínios</a></p>
-  <h2>{{ condominio.nome }}</h2>
-  <p class="muted">
-    <a href="{{ url_for('ver_condominio_2via', condominio_id=condominio.id) }}">Ver boletos 2ª via (arquivos salvos)</a>
-  </p>
+  <section class="ct-cabecalho">
+    <a class="ct-voltar" href="{{ url_for('index') }}">&larr; Condomínios</a>
+    <p class="ct-eyebrow">Cobrança · Boletos ao vivo</p>
+    <h2 class="ct-titulo">{{ condominio.nome }}</h2>
+    <p class="ct-subtitulo">
+      <a href="{{ url_for('ver_condominio_2via', condominio_id=condominio.id) }}">Ver boletos 2ª via (arquivos salvos)</a>
+    </p>
+  </section>
 
-  <div class="filtros">
-    <label>
-      Trocar de condomínio:
-      <select id="seletor-condominio">
-        {% for c in condominios %}
-          <option value="{{ c.id }}" {% if c.id == condominio.id %}selected{% endif %}>
-            {{ c.nome }}{% if c.status %} ({{ c.status }}){% endif %}
-          </option>
-        {% endfor %}
-      </select>
-    </label>
-  </div>
-  <script>
-    document.getElementById('seletor-condominio').addEventListener('change', (ev) => {
-      const baseUrl = "{{ url_for('ver_condominio', condominio_id=0) }}";
-      window.location.href = baseUrl.replace('/0', '/' + ev.target.value);
-    });
-  </script>
+  <section class="ct-painel">
+    <div class="ct-painel-linha">
+      <label class="ct-campo">
+        <span>Trocar de condomínio</span>
+        <select id="seletor-condominio">
+          {% for c in condominios %}
+            <option value="{{ c.id }}" {% if c.id == condominio.id %}selected{% endif %}>
+              {{ c.nome }}{% if c.status %} ({{ c.status }}){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <script>
+      document.getElementById('seletor-condominio').addEventListener('change', (ev) => {
+        const baseUrl = "{{ url_for('ver_condominio', condominio_id=0) }}";
+        window.location.href = baseUrl.replace('/0', '/' + ev.target.value);
+      });
+    </script>
 
-  <form id="form-enviar-massa">
-    <button type="submit">Enviar boletos em massa</button>
-  </form>
-
-  <div class="filtros">
-    <label>
-      Unidade:
-      <input type="text" id="filtro-unidade" placeholder="ex: 01-LT-001">
-    </label>
-    <label>
-      Mês de vencimento:
-      <select id="filtro-mes">
-        <option value="">Todos</option>
-        {% for m in meses %}
-          <option value="{{ m }}" {% if m == mes_selecionado %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
-      </select>
-    </label>
-  </div>
+    <div class="ct-painel-linha ct-filtros">
+      <label class="ct-campo">
+        <span>Unidade</span>
+        <input type="text" id="filtro-unidade" placeholder="ex: 01-LT-001">
+      </label>
+      <label class="ct-campo">
+        <span>Mês de vencimento</span>
+        <select id="filtro-mes">
+          <option value="">Todos</option>
+          {% for m in meses %}
+            <option value="{{ m }}" {% if m == mes_selecionado %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <form id="form-enviar-massa" class="ct-form-massa">
+        <button type="submit" class="ct-btn-massa">Enviar boletos em massa</button>
+      </form>
+    </div>
+  </section>
 
   <p id="total-unidades" class="total-destaque"></p>
 
-  <table id="tabela-unidades">
-    <thead>
-      <tr>
-        <th>Unidade</th>
-        <th>Bloco/Apto</th>
-        <th>Proprietário</th>
-        <th>Email</th>
-        <th>Ações</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for u in unidades if u.tem_cobranca %}
-        <tr data-unidade="{{ u.unidade|lower }}" data-mes="{{ u.vencimento_mes or '' }}">
-          <td>{{ u.unidade }}</td>
-          <td>{{ u.bloco }} / {{ u.apto }}</td>
-          <td>
-            {{ u.proprietario }}
-            <a href="{{ url_for('editar_unidade', condominio_id=condominio.id, unidade=u.unidade, origem='padrao') }}"
-               class="icone-editar" title="Editar nome e email da unidade">✏️</a>
-          </td>
-          <td>{{ u.email or "—" }}</td>
-          <td>
-            <a href="{{ url_for('ver_boleto', condominio_id=condominio.id, unidade=u.unidade) }}" class="btn-ver-boleto">Ver boleto</a>
-            <form method="post" style="display:inline" class="form-enviar-unidade"
-                  action="{{ url_for('enviar_individual', condominio_id=condominio.id, unidade=u.unidade) }}">
-              <button type="submit" class="btn-enviar-unidade">Enviar por email</button>
-            </form>
-          </td>
+  <div class="ct-tabela-wrap">
+    <table id="tabela-unidades">
+      <thead>
+        <tr>
+          <th>Unidade</th>
+          <th>Bloco / Apto</th>
+          <th>Proprietário</th>
+          <th>Email</th>
+          <th>Ações</th>
         </tr>
-      {% else %}
-        <tr><td colspan="5">Nenhuma unidade com boleto em aberto para este condomínio.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for u in unidades if u.tem_cobranca %}
+          <tr data-unidade="{{ u.unidade|lower }}" data-mes="{{ u.vencimento_mes or '' }}">
+            <td class="ct-codigo">{{ u.unidade }}</td>
+            <td class="ct-codigo">{{ u.bloco }} / {{ u.apto }}</td>
+            <td class="ct-nome">
+              {{ u.proprietario }}
+              <a href="{{ url_for('editar_unidade', condominio_id=condominio.id, unidade=u.unidade, origem='padrao') }}"
+                 class="icone-editar" title="Editar nome e email da unidade">✏️</a>
+            </td>
+            <td class="ct-email">{{ u.email or "—" }}</td>
+            <td class="ct-acoes">
+              <a href="{{ url_for('ver_boleto', condominio_id=condominio.id, unidade=u.unidade) }}" class="btn-ver-boleto">Ver boleto</a>
+              <form method="post" class="form-enviar-unidade"
+                    action="{{ url_for('enviar_individual', condominio_id=condominio.id, unidade=u.unidade) }}">
+                <button type="submit" class="btn-enviar-unidade">Enviar por email</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="ct-vazio">Nenhuma unidade com boleto em aberto para este condomínio.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
   <script>
     const filtroUnidade = document.getElementById('filtro-unidade');

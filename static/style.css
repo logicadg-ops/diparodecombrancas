@@ -72,3 +72,250 @@ button:hover { background: #14293e; }
 .flashes { list-style: none; padding: 0; }
 .flash-success { background: #e3f7e6; border: 1px solid #33a854; padding: 0.5rem 1rem; border-radius: 4px; }
 .flash-error { background: #fdecec; border: 1px solid #d93025; padding: 0.5rem 1rem; border-radius: 4px; }
+
+/* ===== Tela de condomínio: livro-razão editorial ===== */
+body.tela-condominio {
+  --tinta: #1c3d5a;
+  --tinta-profunda: #11283d;
+  --papel: #f5efe3;
+  --papel-escuro: #ebe2d0;
+  --ocre: #b5772b;
+  --cinza-texto: #5b5a55;
+  --verde: #2f7d4f;
+  --vermelho: #b8392b;
+  background-color: var(--papel);
+  background-image:
+    radial-gradient(rgba(28, 61, 90, 0.05) 1px, transparent 1px),
+    radial-gradient(ellipse at 90% -10%, rgba(181, 119, 43, 0.12), transparent 55%);
+  background-size: 6px 6px, auto;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  color: #211f1b;
+}
+body.tela-condominio header {
+  background: var(--tinta-profunda);
+  border-bottom: 3px solid var(--ocre);
+}
+body.tela-condominio header h1 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+}
+body.tela-condominio .menu-principal { background: var(--tinta); }
+body.tela-condominio main {
+  max-width: 1080px;
+  padding: 2.25rem 2rem 4rem;
+  animation: ct-entrada 0.6s ease-out both;
+}
+@keyframes ct-entrada {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+body.tela-condominio .ct-cabecalho {
+  border-bottom: 1px solid rgba(28, 61, 90, 0.2);
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+body.tela-condominio .ct-voltar {
+  color: var(--tinta);
+  font-size: 0.85rem;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--tinta);
+}
+body.tela-condominio .ct-eyebrow {
+  margin: 1rem 0 0.25rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ocre);
+  font-weight: 600;
+}
+body.tela-condominio .ct-titulo {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(2rem, 4.5vw, 3rem);
+  font-weight: 800;
+  line-height: 1.05;
+  margin: 0;
+  color: var(--tinta-profunda);
+}
+body.tela-condominio .ct-subtitulo { margin: 0.6rem 0 0; font-size: 0.92rem; }
+body.tela-condominio .ct-subtitulo a {
+  color: var(--tinta);
+  text-decoration: underline;
+  text-decoration-color: var(--ocre);
+  text-underline-offset: 3px;
+}
+
+body.tela-condominio .ct-painel {
+  background: #fffdf8;
+  border: 1px solid rgba(28, 61, 90, 0.15);
+  box-shadow: 0 12px 30px -18px rgba(28, 61, 90, 0.35);
+  border-radius: 4px;
+  padding: 1.25rem 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+body.tela-condominio .ct-painel-linha { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; }
+body.tela-condominio .ct-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--cinza-texto);
+  min-width: 200px;
+}
+body.tela-condominio .ct-campo span {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+body.tela-condominio .ct-campo select,
+body.tela-condominio .ct-campo input {
+  font: 500 0.95rem "IBM Plex Sans", system-ui, sans-serif;
+  color: #211f1b;
+  background: var(--papel);
+  border: 1px solid rgba(28, 61, 90, 0.25);
+  border-bottom: 2px solid var(--tinta);
+  border-radius: 2px;
+  padding: 0.55rem 0.7rem;
+  min-width: 220px;
+}
+body.tela-condominio .ct-campo select:focus,
+body.tela-condominio .ct-campo input:focus { outline: 2px solid var(--ocre); outline-offset: 1px; }
+
+body.tela-condominio .ct-form-massa { margin-left: auto; }
+body.tela-condominio .ct-btn-massa {
+  background: var(--tinta);
+  color: #fffdf8;
+  font: 600 0.9rem "IBM Plex Sans", system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  border: none;
+  border-radius: 2px;
+  padding: 0.75rem 1.25rem;
+  box-shadow: 4px 4px 0 var(--ocre);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+body.tela-condominio .ct-btn-massa:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--ocre);
+  background: var(--tinta-profunda);
+}
+
+body.tela-condominio .total-destaque {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.15rem;
+  font-style: italic;
+  color: var(--tinta);
+  margin: 1.5rem 0 0.5rem;
+}
+
+body.tela-condominio .ct-tabela-wrap {
+  background: #fffdf8;
+  border: 1px solid rgba(28, 61, 90, 0.15);
+  border-radius: 4px;
+  overflow-x: auto;
+  box-shadow: 0 12px 30px -20px rgba(28, 61, 90, 0.35);
+}
+body.tela-condominio table { margin: 0; background: transparent; width: 100%; border-collapse: collapse; }
+body.tela-condominio thead th {
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tinta);
+  background: var(--papel-escuro);
+  border-bottom: 2px solid var(--tinta);
+  padding: 0.9rem 1rem;
+  font-weight: 600;
+}
+body.tela-condominio td {
+  border-bottom: 1px dashed rgba(28, 61, 90, 0.25);
+  padding: 0.85rem 1rem;
+  vertical-align: middle;
+  font-size: 0.92rem;
+}
+body.tela-condominio tbody tr {
+  transition: background 0.2s ease;
+  animation: ct-linha 0.5s ease-out both;
+}
+body.tela-condominio tbody tr:nth-child(1) { animation-delay: 0.05s; }
+body.tela-condominio tbody tr:nth-child(2) { animation-delay: 0.1s; }
+body.tela-condominio tbody tr:nth-child(3) { animation-delay: 0.15s; }
+body.tela-condominio tbody tr:nth-child(4) { animation-delay: 0.2s; }
+body.tela-condominio tbody tr:nth-child(n+5) { animation-delay: 0.25s; }
+@keyframes ct-linha {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+body.tela-condominio tbody tr:hover { background: rgba(181, 119, 43, 0.08); }
+body.tela-condominio tbody tr:last-child td { border-bottom: none; }
+
+body.tela-condominio .ct-codigo {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.85rem;
+  color: var(--tinta-profunda);
+  white-space: nowrap;
+}
+body.tela-condominio .ct-nome { font-family: "Fraunces", Georgia, serif; font-size: 1rem; font-weight: 600; color: #211f1b; }
+body.tela-condominio .ct-email { font-size: 0.85rem; color: var(--cinza-texto); word-break: break-all; }
+body.tela-condominio .ct-vazio {
+  text-align: center;
+  font-family: "Fraunces", Georgia, serif;
+  font-style: italic;
+  color: var(--cinza-texto);
+  padding: 2rem;
+}
+
+body.tela-condominio .ct-acoes { white-space: nowrap; }
+body.tela-condominio .ct-acoes form { display: inline-block; margin-left: 0.5rem; }
+
+body.tela-condominio .icone-editar {
+  font-size: 0.85rem;
+  margin-left: 0.5rem;
+  opacity: 0.55;
+  transition: opacity 0.15s, transform 0.15s;
+  display: inline-block;
+}
+body.tela-condominio .icone-editar:hover { opacity: 1; transform: rotate(-12deg); }
+
+body.tela-condominio .btn-ver-boleto {
+  display: inline-block;
+  background: transparent;
+  color: var(--tinta);
+  border: 1.5px solid var(--tinta);
+  border-radius: 2px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  margin-right: 0.25rem;
+  transition: background 0.15s, color 0.15s;
+}
+body.tela-condominio .btn-ver-boleto:hover { background: var(--tinta); color: #fffdf8; }
+
+body.tela-condominio .btn-enviar-unidade {
+  width: auto;
+  min-width: 150px;
+  margin: 0;
+  background: var(--tinta-profunda);
+  color: #fffdf8;
+  border: none;
+  border-radius: 2px;
+  padding: 0.45rem 0.9rem;
+  font: 600 0.82rem "IBM Plex Sans", system-ui, sans-serif;
+  transition: background 0.2s, transform 0.15s;
+}
+body.tela-condominio .btn-enviar-unidade:hover:not(:disabled) { background: var(--ocre); transform: translateY(-1px); }
+body.tela-condominio .btn-enviar-unidade:disabled { opacity: 1; cursor: default; }
+body.tela-condominio .btn-enviar-unidade.btn-sucesso,
+body.tela-condominio .btn-enviar-unidade.btn-sucesso:hover { background: var(--verde); }
+body.tela-condominio .btn-enviar-unidade.btn-erro,
+body.tela-condominio .btn-enviar-unidade.btn-erro:hover { background: var(--vermelho); }
+
+@media (max-width: 700px) {
+  body.tela-condominio main { padding: 1.5rem 1rem 3rem; }
+  body.tela-condominio .ct-form-massa { margin-left: 0; width: 100%; }
+  body.tela-condominio .ct-btn-massa { width: 100%; }
+  body.tela-condominio .ct-campo select,
+  body.tela-condominio .ct-campo input { min-width: 0; width: 100%; }
+}
