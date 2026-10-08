@@ -124,8 +124,24 @@ def get_condominio(condominio_id):
     }
 
 
+def _deduplicar_unidades(unidades):
+    """Alguns condomínios têm registros duplicados pra mesma unidade (mesmo
+    id_condominio + unidade). Processar os duplicados em dobro foi o que
+    esgotou a memória do dyno da Heroku num condomínio com 700 linhas pra
+    348 unidades reais. Mantém, de cada grupo, a linha mais completa
+    (com mais campos preenchidos)."""
+    por_chave = {}
+    for u in unidades:
+        chave = (u.get("unidade") or "").strip()
+        atual = por_chave.get(chave)
+        if atual is None or sum(1 for v in u.values() if v) > sum(1 for v in atual.values() if v):
+            por_chave[chave] = u
+    return list(por_chave.values())
+
+
 def get_unidades(condominio_id):
-    """Retorna as unidades cadastradas para um condomínio, direto do Supabase."""
+    """Retorna as unidades cadastradas para um condomínio, direto do
+    Supabase, já sem duplicatas (mesma unidade com mais de um registro)."""
     resp = requests.get(
         f"{config.SUPABASE_URL}/rest/v1/unidades",
         headers=_headers(),
@@ -137,7 +153,7 @@ def get_unidades(condominio_id):
         timeout=15,
     )
     resp.raise_for_status()
-    return resp.json()
+    return _deduplicar_unidades(resp.json())
 
 
 def get_unidade(condominio_id, unidade):

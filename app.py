@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
+import requests
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, abort, session, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -79,6 +80,14 @@ def _cobranca_da_unidade(condominio_id, unidade_row):
         )
     except condomob.CobrancaNaoEncontrada:
         return None
+    except requests.RequestException:
+        # Falha pontual da Condomob (timeout, 500, etc) numa unidade não
+        # deve derrubar a lista inteira — essa unidade só fica sem dados.
+        app.logger.warning(
+            "Condomob falhou pra unidade %s (condomínio %s)",
+            unidade_row.get("unidade"), condominio_id, exc_info=True,
+        )
+        return None
 
 
 def marcar_unidades_com_cobranca(condominio_id, unidades):
@@ -127,6 +136,14 @@ def _dados_unidade_2via(condominio_id, unidade_row):
     try:
         cobranca = _dados_cobranca_2via(condominio_id, unidade_row.get("unidade"), contato)
         return True, cobranca.get("vencimento")
+    except requests.RequestException:
+        # Falha pontual da Condomob numa unidade: mantém o PDF visível
+        # (já sabemos que existe no R2), só sem os dados de vencimento.
+        app.logger.warning(
+            "Condomob falhou pra unidade %s (condomínio %s)",
+            unidade_row.get("unidade"), condominio_id, exc_info=True,
+        )
+        return True, None
     except r2_client.BoletoNaoEncontrado:
         return False, None
 
