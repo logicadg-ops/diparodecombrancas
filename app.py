@@ -10,7 +10,7 @@ from services import auth_client, condomob, email_service, importacao_unidades, 
 
 app = Flask(__name__)
 app.secret_key = config.FLASK_SECRET_KEY
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024
 # Atrás do proxy da Heroku (TLS termina lá), sem isso url_for(_external=True)
 # geraria links http:// em vez de https://.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
