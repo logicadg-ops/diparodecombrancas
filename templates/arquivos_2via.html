@@ -56,6 +56,7 @@
       Se já existir um arquivo com esse nome, ele será substituído — é assim que uma
       nova emissão de boleto atualiza o link que já foi enviado por email.
     </p>
+    <p class="muted">Limite máximo: 200MB por envio (somando todos os arquivos selecionados de uma vez).</p>
     <form method="post" action="{{ url_for('upload_arquivo_2via', condominio_id=condominio.id) }}"
           enctype="multipart/form-data">
       <input type="file" name="arquivos" accept="application/pdf" multiple required>
