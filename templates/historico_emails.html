@@ -99,11 +99,13 @@
 
   <div class="paginacao">
     {% if page > 1 %}
+      <a href="{{ url_for('historico_emails', page=1, **args_base) }}">&laquo; Primeira</a>
       <a href="{{ url_for('historico_emails', page=page - 1, **args_base) }}">&larr; Anterior</a>
     {% endif %}
     <span class="muted">Página {{ page }} de {{ total_paginas }}</span>
     {% if page < total_paginas %}
       <a href="{{ url_for('historico_emails', page=page + 1, **args_base) }}">Próxima &rarr;</a>
+      <a href="{{ url_for('historico_emails', page=total_paginas, **args_base) }}">Última &raquo;</a>
     {% endif %}
   </div>
 {% endblock %}
