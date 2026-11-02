@@ -935,7 +935,7 @@ def _ler_filtros_historico():
 
 def _buscar_todas_mensagens_historico(
     status, recipient, subject, unidade, condominio_id, start_date, end_date,
-    por_pagina_api=100, limite_paginas_api=20,
+    por_pagina_api=500, limite_paginas_api=50,
 ):
     """Busca TODAS as mensagens que casam com os filtros (sem paginação na
     tela), usada tanto para listar quando há filtro de unidade/condomínio
