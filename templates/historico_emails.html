@@ -71,7 +71,7 @@
             </span>
             {% if m.bounce_description %}<div class="muted">{{ m.bounce_description }}</div>{% endif %}
           </td>
-          <td>{{ m.opened_at[:16].replace("T", " ") if m.opened_at else "—" }}</td>
+          <td>{{ m.opened_at|data_br }}</td>
         </tr>
       {% else %}
         <tr><td colspan="6">Nenhum envio encontrado para o período e filtros informados.</td></tr>

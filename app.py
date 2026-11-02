@@ -24,6 +24,16 @@ ROTAS_PUBLICAS = {
 }
 
 
+@app.template_filter("data_br")
+def _filtro_data_br(valor_iso):
+    if not valor_iso:
+        return "—"
+    try:
+        return datetime.fromisoformat(valor_iso).strftime("%d/%m/%Y")
+    except (TypeError, ValueError):
+        return valor_iso
+
+
 @app.before_request
 def exigir_login():
     if request.endpoint in ROTAS_PUBLICAS or request.endpoint is None:
