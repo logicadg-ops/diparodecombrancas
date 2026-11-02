@@ -25,6 +25,10 @@
       </select>
     </label>
     <label>
+      Unidade
+      <input type="text" name="unidade" value="{{ unidade }}" placeholder="ex: 01-LT-001">
+    </label>
+    <label>
       Destinatário contém
       <input type="text" name="recipient" value="{{ recipient }}" placeholder="email@exemplo.com">
     </label>
@@ -80,7 +84,7 @@
   </table>
 
   <div class="paginacao">
-    {% set args_base = {"status": status, "start_date": start_date, "end_date": end_date, "recipient": recipient, "subject": subject} %}
+    {% set args_base = {"status": status, "start_date": start_date, "end_date": end_date, "recipient": recipient, "subject": subject, "unidade": unidade} %}
     {% if page > 1 %}
       <a href="{{ url_for('historico_emails', page=page - 1, **args_base) }}">&larr; Anterior</a>
     {% endif %}

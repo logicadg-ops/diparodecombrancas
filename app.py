@@ -878,20 +878,10 @@ def excluir_todos_arquivos_2via(condominio_id):
     return redirect(url_for("arquivos_2via", condominio_id=condominio_id))
 
 
-def _cruzar_unidade_envios(mensagens, start_date, end_date, recipient=None):
-    """Para cada mensagem retornada pela SMTP API, procura na tabela
-    `enviowhatapp` o registro de disparo com o mesmo destinatário e horário
+def _cruzar_unidade_envios(mensagens, envios):
+    """Para cada mensagem retornada pela SMTP API, procura entre os `envios`
+    (registros da tabela `enviowhatapp`) o de mesmo destinatário e horário
     mais próximo, e preenche unidade/condomínio de origem."""
-    if not mensagens:
-        return mensagens
-
-    try:
-        envios = supabase_client.listar_envios_email(
-            start_date, f"{end_date}T23:59:59", contato=recipient
-        )
-    except requests.RequestException:
-        return mensagens
-
     por_contato = {}
     for envio in envios:
         try:
@@ -928,6 +918,7 @@ def historico_emails():
     status = request.args.get("status", "all")
     recipient = (request.args.get("recipient") or "").strip() or None
     subject = (request.args.get("subject") or "").strip() or None
+    unidade = (request.args.get("unidade") or "").strip() or None
     start_date = request.args.get("start_date") or (date.today() - timedelta(days=30)).isoformat()
     end_date = request.args.get("end_date") or date.today().isoformat()
     try:
@@ -938,20 +929,48 @@ def historico_emails():
     mensagens = []
     total_paginas = 1
     erro = None
+    periodo_fim = f"{end_date}T23:59:59"
+
     try:
-        mensagens, total_paginas = email_reports.listar_mensagens(
-            status=status,
-            start_date=start_date,
-            end_date=end_date,
-            recipient=recipient,
-            subject=subject,
-            page=page,
-            per=30,
-        )
+        if unidade:
+            # Não há como filtrar por unidade direto na SMTP API: primeiro
+            # descobrimos, no log de disparos, quais emails foram usados
+            # para essa unidade, e consultamos a SMTP API só para eles.
+            envios = supabase_client.listar_envios_email(start_date, periodo_fim, unidade=unidade)
+            destinatarios = sorted({(e.get("contato") or "").strip().lower() for e in envios if e.get("contato")})
+
+            todas = []
+            for email_destino in destinatarios:
+                msgs, _ = email_reports.listar_mensagens(
+                    status=status,
+                    start_date=start_date,
+                    end_date=end_date,
+                    recipient=email_destino,
+                    subject=subject,
+                    page=1,
+                    per=100,
+                )
+                todas.extend(msgs)
+
+            todas.sort(key=lambda m: m.get("sent_at") or "", reverse=True)
+            todas = _cruzar_unidade_envios(todas, envios)
+
+            total_paginas = max(1, -(-len(todas) // 30))
+            mensagens = todas[(page - 1) * 30 : page * 30]
+        else:
+            mensagens, total_paginas = email_reports.listar_mensagens(
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
+                recipient=recipient,
+                subject=subject,
+                page=page,
+                per=30,
+            )
+            envios = supabase_client.listar_envios_email(start_date, periodo_fim, contato=recipient)
+            mensagens = _cruzar_unidade_envios(mensagens, envios)
     except requests.RequestException as e:
         erro = f"Não foi possível consultar o histórico de envios agora: {e}"
-    else:
-        mensagens = _cruzar_unidade_envios(mensagens, start_date, end_date, recipient)
 
     return render_template(
         "historico_emails.html",
@@ -959,6 +978,7 @@ def historico_emails():
         status=status,
         recipient=recipient or "",
         subject=subject or "",
+        unidade=unidade or "",
         start_date=start_date,
         end_date=end_date,
         page=page,
