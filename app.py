@@ -29,7 +29,7 @@ def _filtro_data_br(valor_iso):
     if not valor_iso:
         return "—"
     try:
-        return datetime.fromisoformat(valor_iso).strftime("%d/%m/%Y")
+        return datetime.fromisoformat(valor_iso).strftime("%d/%m/%y %H:%M:%S")
     except (TypeError, ValueError):
         return valor_iso
 
