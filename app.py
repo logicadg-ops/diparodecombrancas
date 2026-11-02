@@ -1,12 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import requests
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, abort, session, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import config
-from services import auth_client, condomob, email_service, importacao_unidades, r2_client, supabase_client
+from services import auth_client, condomob, email_reports, email_service, importacao_unidades, r2_client, supabase_client
 
 app = Flask(__name__)
 app.secret_key = config.FLASK_SECRET_KEY
@@ -866,6 +866,48 @@ def excluir_todos_arquivos_2via(condominio_id):
     total = r2_client.deletar_todos_arquivos(condominio_id)
     flash(f"{total} arquivo(s) excluído(s) da pasta de {condominio['nome']}.", "success")
     return redirect(url_for("arquivos_2via", condominio_id=condominio_id))
+
+
+@app.route("/emails/historico")
+def historico_emails():
+    status = request.args.get("status", "all")
+    recipient = (request.args.get("recipient") or "").strip() or None
+    subject = (request.args.get("subject") or "").strip() or None
+    start_date = request.args.get("start_date") or (date.today() - timedelta(days=30)).isoformat()
+    end_date = request.args.get("end_date") or date.today().isoformat()
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+
+    mensagens = []
+    total_paginas = 1
+    erro = None
+    try:
+        mensagens, total_paginas = email_reports.listar_mensagens(
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            recipient=recipient,
+            subject=subject,
+            page=page,
+            per=30,
+        )
+    except requests.RequestException as e:
+        erro = f"Não foi possível consultar o histórico de envios agora: {e}"
+
+    return render_template(
+        "historico_emails.html",
+        mensagens=mensagens,
+        status=status,
+        recipient=recipient or "",
+        subject=subject or "",
+        start_date=start_date,
+        end_date=end_date,
+        page=page,
+        total_paginas=total_paginas,
+        erro=erro,
+    )
 
 
 if __name__ == "__main__":

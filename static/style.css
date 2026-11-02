@@ -73,6 +73,18 @@ button:hover { background: #14293e; }
 .flash-success { background: #e3f7e6; border: 1px solid #33a854; padding: 0.5rem 1rem; border-radius: 4px; }
 .flash-error { background: #fdecec; border: 1px solid #d93025; padding: 0.5rem 1rem; border-radius: 4px; }
 
+.badge-status {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-weight: 600;
+}
+.badge-status-ok { background: #e3f7e6; color: #1e7a37; }
+.badge-status-erro { background: #fdecec; color: #b7261a; }
+.badge-status-outro { background: #eef1f5; color: #5b6572; }
+.paginacao { display: flex; gap: 1rem; align-items: center; margin-top: 1rem; }
+
 /* ===== Tela de condomínio: livro-razão editorial ===== */
 body.tela-condominio {
   --tinta: #1c3d5a;

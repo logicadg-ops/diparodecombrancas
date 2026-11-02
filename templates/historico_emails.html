@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Histórico de emails{% endblock %}
+{% block body_class %}pagina-larga{% endblock %}
+{% block content %}
+  <h2>Histórico de emails enviados</h2>
+  <p class="muted">
+    Dados consultados em tempo real na SMTP API da Locaweb (status de entrega, abertura e falhas).
+  </p>
+
+  <form method="get" class="filtros">
+    <label>
+      De
+      <input type="date" name="start_date" value="{{ start_date }}">
+    </label>
+    <label>
+      Até
+      <input type="date" name="end_date" value="{{ end_date }}">
+    </label>
+    <label>
+      Status
+      <select name="status">
+        <option value="all" {% if status == "all" %}selected{% endif %}>Todos</option>
+        <option value="delivered" {% if status == "delivered" %}selected{% endif %}>Entregues</option>
+        <option value="errors" {% if status == "errors" %}selected{% endif %}>Com erro</option>
+      </select>
+    </label>
+    <label>
+      Destinatário contém
+      <input type="text" name="recipient" value="{{ recipient }}" placeholder="email@exemplo.com">
+    </label>
+    <label>
+      Assunto contém
+      <input type="text" name="subject" value="{{ subject }}" placeholder="nome do condomínio...">
+    </label>
+    <button type="submit">Filtrar</button>
+  </form>
+
+  {% if erro %}
+    <p class="flash-error">{{ erro }}</p>
+  {% endif %}
+
+  <table>
+    <thead>
+      <tr>
+        <th>Enviado em</th>
+        <th>Destinatário</th>
+        <th>Assunto</th>
+        <th>Status</th>
+        <th>Aberto em</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in mensagens %}
+        {% set status_txt = (m.status or "")|lower %}
+        <tr>
+          <td>{{ m.sent_at[:16].replace("T", " ") if m.sent_at else "—" }}</td>
+          <td>{{ m.recipient }}</td>
+          <td class="quebra">{{ m.subject }}</td>
+          <td>
+            <span class="badge-status {% if 'entreg' in status_txt %}badge-status-ok{% elif m.hard_bounce or m.bounce_code or 'erro' in status_txt or 'rejeit' in status_txt or 'bloque' in status_txt %}badge-status-erro{% else %}badge-status-outro{% endif %}">
+              {{ m.status or "—" }}
+            </span>
+            {% if m.bounce_description %}<div class="muted">{{ m.bounce_description }}</div>{% endif %}
+          </td>
+          <td>{{ m.opened_at[:16].replace("T", " ") if m.opened_at else "—" }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5">Nenhum envio encontrado para o período e filtros informados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="paginacao">
+    {% set args_base = {"status": status, "start_date": start_date, "end_date": end_date, "recipient": recipient, "subject": subject} %}
+    {% if page > 1 %}
+      <a href="{{ url_for('historico_emails', page=page - 1, **args_base) }}">&larr; Anterior</a>
+    {% endif %}
+    <span class="muted">Página {{ page }} de {{ total_paginas }}</span>
+    {% if page < total_paginas %}
+      <a href="{{ url_for('historico_emails', page=page + 1, **args_base) }}">Próxima &rarr;</a>
+    {% endif %}
+  </div>
+{% endblock %}
