@@ -28,6 +28,27 @@ def _formatar_data(data_iso):
         return data_iso
 
 
+def _texto_vencimento(data_iso):
+    if not data_iso:
+        return "Seu boleto está disponível"
+    try:
+        data_vencimento = datetime.strptime(data_iso, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return "Seu boleto está disponível"
+
+    dias = (data_vencimento - datetime.now().date()).days
+    if dias > 1:
+        return f"Seu boleto vencerá daqui a {dias} dias"
+    if dias == 1:
+        return "Seu boleto vencerá daqui a 1 dia"
+    if dias == 0:
+        return "Seu boleto vence hoje"
+    dias_atraso = -dias
+    if dias_atraso == 1:
+        return "Seu boleto venceu há 1 dia"
+    return f"Seu boleto venceu há {dias_atraso} dias"
+
+
 def _enviar_email(destinatario_email, assunto, html):
     """Envia via API Locaweb SMTP LW (POST /v1/messages).
 
@@ -95,6 +116,7 @@ def montar_corpo_html_2via(
         administradora_nome=administradora_nome or "Administradora",
         mes_referencia=mes_referencia or "-",
         vencimento_formatado=_formatar_data(vencimento),
+        texto_vencimento=_texto_vencimento(vencimento),
         link=link,
     )
 
