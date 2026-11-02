@@ -70,7 +70,7 @@
       <tbody>
         {% for m in mensagens %}
           {% set status_txt = (m.status or "")|lower %}
-          <tr>
+          <tr class="{% if m.opened_at %}linha-aberta{% endif %}">
             <td>{{ m.sent_at|data_br }}</td>
             <td>{{ m.recipient }}</td>
             <td>

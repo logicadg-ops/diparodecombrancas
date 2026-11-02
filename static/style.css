@@ -40,6 +40,9 @@ button:hover { background: #14293e; }
 .tabela-historico th:first-child, .tabela-historico td:first-child,
 .tabela-historico th:last-child, .tabela-historico td:last-child { white-space: nowrap; }
 .tabela-historico th:nth-child(3), .tabela-historico td:nth-child(3) { max-width: 180px; }
+.tabela-historico tr.linha-aberta { background: #eaf6ec; }
+.tabela-historico tr.linha-aberta:hover { background: #ddf0e1; }
+.tabela-historico tr.linha-aberta td:first-child { border-left: 3px solid #33a854; }
 .total-destaque {
   font-size: 1.3rem;
   font-weight: 700;
