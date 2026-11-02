@@ -55,45 +55,47 @@
     <p class="flash-error">{{ erro }}</p>
   {% endif %}
 
-  <table>
-    <thead>
-      <tr>
-        <th>Enviado em</th>
-        <th>Destinatário</th>
-        <th>Unidade</th>
-        <th>Assunto</th>
-        <th>Status</th>
-        <th>Aberto em</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for m in mensagens %}
-        {% set status_txt = (m.status or "")|lower %}
+  <div class="tabela-rolavel">
+    <table class="tabela-historico">
+      <thead>
         <tr>
-          <td>{{ m.sent_at[:16].replace("T", " ") if m.sent_at else "—" }}</td>
-          <td>{{ m.recipient }}</td>
-          <td>
-            {% if m.unidade %}
-              {{ m.unidade }}
-              {% if m.condominio_nome %}<div class="muted">{{ m.condominio_nome }}</div>{% endif %}
-            {% else %}
-              <span class="muted">—</span>
-            {% endif %}
-          </td>
-          <td class="quebra">{{ m.subject }}</td>
-          <td>
-            <span class="badge-status {% if 'entreg' in status_txt %}badge-status-ok{% elif m.hard_bounce or m.bounce_code or 'erro' in status_txt or 'rejeit' in status_txt or 'bloque' in status_txt %}badge-status-erro{% else %}badge-status-outro{% endif %}">
-              {{ m.status or "—" }}
-            </span>
-            {% if m.bounce_description %}<div class="muted">{{ m.bounce_description }}</div>{% endif %}
-          </td>
-          <td>{{ m.opened_at|data_br }}</td>
+          <th>Enviado em</th>
+          <th>Destinatário</th>
+          <th>Unidade</th>
+          <th>Assunto</th>
+          <th>Status</th>
+          <th>Aberto em</th>
         </tr>
-      {% else %}
-        <tr><td colspan="6">Nenhum envio encontrado para o período e filtros informados.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for m in mensagens %}
+          {% set status_txt = (m.status or "")|lower %}
+          <tr>
+            <td>{{ m.sent_at|data_br }}</td>
+            <td>{{ m.recipient }}</td>
+            <td>
+              {% if m.unidade %}
+                {{ m.unidade }}
+                {% if m.condominio_nome %}<div class="muted">{{ m.condominio_nome }}</div>{% endif %}
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td class="quebra">{{ m.subject }}</td>
+            <td>
+              <span class="badge-status {% if 'entreg' in status_txt %}badge-status-ok{% elif m.hard_bounce or m.bounce_code or 'erro' in status_txt or 'rejeit' in status_txt or 'bloque' in status_txt %}badge-status-erro{% else %}badge-status-outro{% endif %}">
+                {{ m.status or "—" }}
+              </span>
+              {% if m.bounce_description %}<div class="muted">{{ m.bounce_description }}</div>{% endif %}
+            </td>
+            <td>{{ m.opened_at|data_br }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6">Nenhum envio encontrado para o período e filtros informados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
   <div class="paginacao">
     {% if page > 1 %}

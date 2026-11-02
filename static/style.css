@@ -32,9 +32,14 @@ button:hover { background: #14293e; }
 .btn-enviar-unidade.btn-erro,
 .btn-enviar-unidade.btn-erro:hover { background-color: #d93025; }
 .btn-enviar-unidade:disabled { opacity: 0.75; cursor: wait; }
-.filtros { display: flex; gap: 1.5rem; margin: 1rem 0; align-items: center; }
+.filtros { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; margin: 1rem 0; align-items: flex-end; }
 .filtros label { display: flex; flex-direction: column; font-size: 0.85em; gap: 0.25rem; }
 .filtros input, .filtros select { padding: 0.4rem; }
+.tabela-rolavel { overflow-x: auto; margin-top: 1rem; }
+.tabela-rolavel table { margin-top: 0; min-width: 920px; }
+.tabela-historico th:first-child, .tabela-historico td:first-child,
+.tabela-historico th:last-child, .tabela-historico td:last-child { white-space: nowrap; }
+.tabela-historico th:nth-child(3), .tabela-historico td:nth-child(3) { max-width: 180px; }
 .total-destaque {
   font-size: 1.3rem;
   font-weight: 700;
