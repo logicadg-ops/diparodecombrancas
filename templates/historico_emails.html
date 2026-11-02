@@ -3,9 +3,6 @@
 {% block body_class %}pagina-larga{% endblock %}
 {% block content %}
   <h2>Histórico de emails enviados</h2>
-  <p class="muted">
-    Dados consultados em tempo real na SMTP API da Locaweb (status de entrega, abertura e falhas).
-  </p>
 
   <form method="get" class="filtros">
     <label>
@@ -25,6 +22,15 @@
       </select>
     </label>
     <label>
+      Condomínio
+      <select name="condominio">
+        <option value="">Todos</option>
+        {% for c in condominios %}
+          <option value="{{ c.id }}" {% if condominio_id == c.id|string %}selected{% endif %}>{{ c.nome }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
       Unidade
       <input type="text" name="unidade" value="{{ unidade }}" placeholder="ex: 01-LT-001">
     </label>
@@ -38,6 +44,12 @@
     </label>
     <button type="submit">Filtrar</button>
   </form>
+
+  {% set args_base = {"status": status, "start_date": start_date, "end_date": end_date, "recipient": recipient, "subject": subject, "unidade": unidade, "condominio": condominio_id} %}
+  <p>
+    <a href="{{ url_for('historico_emails_pdf', **args_base) }}">Exportar PDF</a> ·
+    <a href="{{ url_for('historico_emails_excel', **args_base) }}">Exportar Excel</a>
+  </p>
 
   {% if erro %}
     <p class="flash-error">{{ erro }}</p>
@@ -84,7 +96,6 @@
   </table>
 
   <div class="paginacao">
-    {% set args_base = {"status": status, "start_date": start_date, "end_date": end_date, "recipient": recipient, "subject": subject, "unidade": unidade} %}
     {% if page > 1 %}
       <a href="{{ url_for('historico_emails', page=page - 1, **args_base) }}">&larr; Anterior</a>
     {% endif %}

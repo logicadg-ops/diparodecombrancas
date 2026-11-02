@@ -6,7 +6,16 @@ from flask import Flask, render_template, redirect, url_for, flash, request, jso
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import config
-from services import auth_client, condomob, email_reports, email_service, importacao_unidades, r2_client, supabase_client
+from services import (
+    auth_client,
+    condomob,
+    email_reports,
+    email_service,
+    importacao_unidades,
+    r2_client,
+    relatorio_emails,
+    supabase_client,
+)
 
 app = Flask(__name__)
 app.secret_key = config.FLASK_SECRET_KEY
@@ -913,14 +922,89 @@ def _cruzar_unidade_envios(mensagens, envios):
     return mensagens
 
 
-@app.route("/emails/historico")
-def historico_emails():
+def _ler_filtros_historico():
     status = request.args.get("status", "all")
     recipient = (request.args.get("recipient") or "").strip() or None
     subject = (request.args.get("subject") or "").strip() or None
     unidade = (request.args.get("unidade") or "").strip() or None
+    condominio_id = (request.args.get("condominio") or "").strip() or None
     start_date = request.args.get("start_date") or (date.today() - timedelta(days=30)).isoformat()
     end_date = request.args.get("end_date") or date.today().isoformat()
+    return status, recipient, subject, unidade, condominio_id, start_date, end_date
+
+
+def _buscar_todas_mensagens_historico(
+    status, recipient, subject, unidade, condominio_id, start_date, end_date,
+    por_pagina_api=100, limite_paginas_api=20,
+):
+    """Busca TODAS as mensagens que casam com os filtros (sem paginação na
+    tela), usada tanto para listar quando há filtro de unidade/condomínio
+    quanto para gerar os relatórios (PDF/Excel)."""
+    periodo_fim = f"{end_date}T23:59:59"
+
+    if condominio_id:
+        # Um condomínio pode ter centenas de unidades/emails — em vez de uma
+        # chamada por destinatário, varremos a SMTP API uma única vez no
+        # período e filtramos localmente pelos emails daquele condomínio.
+        envios = supabase_client.listar_envios_email(
+            start_date, periodo_fim, unidade=unidade, condominio=condominio_id
+        )
+        destinatarios = {(e.get("contato") or "").strip().lower() for e in envios if e.get("contato")}
+
+        todas = []
+        pagina_api = 1
+        while True:
+            msgs, total_pag_api = email_reports.listar_mensagens(
+                status=status, start_date=start_date, end_date=end_date,
+                recipient=recipient, subject=subject, page=pagina_api, per=por_pagina_api,
+            )
+            todas.extend(msgs)
+            if pagina_api >= total_pag_api or pagina_api >= limite_paginas_api:
+                break
+            pagina_api += 1
+
+        todas = [m for m in todas if (m.get("recipient") or "").strip().lower() in destinatarios]
+    elif unidade:
+        # Unidade isolada tem poucos emails associados: compensa consultar
+        # a SMTP API só para eles.
+        envios = supabase_client.listar_envios_email(start_date, periodo_fim, unidade=unidade)
+        destinatarios = sorted({(e.get("contato") or "").strip().lower() for e in envios if e.get("contato")})
+
+        todas = []
+        for email_destino in destinatarios:
+            if recipient and recipient.lower() not in email_destino:
+                continue
+            pagina_api = 1
+            while True:
+                msgs, total_pag_api = email_reports.listar_mensagens(
+                    status=status, start_date=start_date, end_date=end_date,
+                    recipient=email_destino, subject=subject, page=pagina_api, per=por_pagina_api,
+                )
+                todas.extend(msgs)
+                if pagina_api >= total_pag_api or pagina_api >= limite_paginas_api:
+                    break
+                pagina_api += 1
+    else:
+        envios = supabase_client.listar_envios_email(start_date, periodo_fim, contato=recipient)
+        todas = []
+        pagina_api = 1
+        while True:
+            msgs, total_pag_api = email_reports.listar_mensagens(
+                status=status, start_date=start_date, end_date=end_date,
+                recipient=recipient, subject=subject, page=pagina_api, per=por_pagina_api,
+            )
+            todas.extend(msgs)
+            if pagina_api >= total_pag_api or pagina_api >= limite_paginas_api:
+                break
+            pagina_api += 1
+
+    todas.sort(key=lambda m: m.get("sent_at") or "", reverse=True)
+    return _cruzar_unidade_envios(todas, envios)
+
+
+@app.route("/emails/historico")
+def historico_emails():
+    status, recipient, subject, unidade, condominio_id, start_date, end_date = _ler_filtros_historico()
     try:
         page = max(1, int(request.args.get("page", 1)))
     except ValueError:
@@ -929,48 +1013,29 @@ def historico_emails():
     mensagens = []
     total_paginas = 1
     erro = None
-    periodo_fim = f"{end_date}T23:59:59"
 
     try:
-        if unidade:
-            # Não há como filtrar por unidade direto na SMTP API: primeiro
-            # descobrimos, no log de disparos, quais emails foram usados
-            # para essa unidade, e consultamos a SMTP API só para eles.
-            envios = supabase_client.listar_envios_email(start_date, periodo_fim, unidade=unidade)
-            destinatarios = sorted({(e.get("contato") or "").strip().lower() for e in envios if e.get("contato")})
-
-            todas = []
-            for email_destino in destinatarios:
-                msgs, _ = email_reports.listar_mensagens(
-                    status=status,
-                    start_date=start_date,
-                    end_date=end_date,
-                    recipient=email_destino,
-                    subject=subject,
-                    page=1,
-                    per=100,
-                )
-                todas.extend(msgs)
-
-            todas.sort(key=lambda m: m.get("sent_at") or "", reverse=True)
-            todas = _cruzar_unidade_envios(todas, envios)
-
+        if unidade or condominio_id:
+            todas = _buscar_todas_mensagens_historico(
+                status, recipient, subject, unidade, condominio_id, start_date, end_date
+            )
             total_paginas = max(1, -(-len(todas) // 30))
-            mensagens = todas[(page - 1) * 30 : page * 30]
+            mensagens = todas[(page - 1) * 30: page * 30]
         else:
+            periodo_fim = f"{end_date}T23:59:59"
             mensagens, total_paginas = email_reports.listar_mensagens(
-                status=status,
-                start_date=start_date,
-                end_date=end_date,
-                recipient=recipient,
-                subject=subject,
-                page=page,
-                per=30,
+                status=status, start_date=start_date, end_date=end_date,
+                recipient=recipient, subject=subject, page=page, per=30,
             )
             envios = supabase_client.listar_envios_email(start_date, periodo_fim, contato=recipient)
             mensagens = _cruzar_unidade_envios(mensagens, envios)
     except requests.RequestException as e:
         erro = f"Não foi possível consultar o histórico de envios agora: {e}"
+
+    try:
+        condominios = supabase_client.get_condominios()
+    except requests.RequestException:
+        condominios = []
 
     return render_template(
         "historico_emails.html",
@@ -979,11 +1044,43 @@ def historico_emails():
         recipient=recipient or "",
         subject=subject or "",
         unidade=unidade or "",
+        condominio_id=condominio_id or "",
+        condominios=condominios,
         start_date=start_date,
         end_date=end_date,
         page=page,
         total_paginas=total_paginas,
         erro=erro,
+    )
+
+
+@app.route("/emails/historico/exportar.pdf")
+def historico_emails_pdf():
+    status, recipient, subject, unidade, condominio_id, start_date, end_date = _ler_filtros_historico()
+    mensagens = _buscar_todas_mensagens_historico(
+        status, recipient, subject, unidade, condominio_id, start_date, end_date
+    )
+    buffer = relatorio_emails.gerar_pdf(
+        mensagens, titulo=f"Histórico de emails — {start_date} a {end_date}"
+    )
+    return Response(
+        buffer.read(),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=historico_emails_{start_date}_a_{end_date}.pdf"},
+    )
+
+
+@app.route("/emails/historico/exportar.xlsx")
+def historico_emails_excel():
+    status, recipient, subject, unidade, condominio_id, start_date, end_date = _ler_filtros_historico()
+    mensagens = _buscar_todas_mensagens_historico(
+        status, recipient, subject, unidade, condominio_id, start_date, end_date
+    )
+    buffer = relatorio_emails.gerar_excel(mensagens)
+    return Response(
+        buffer.read(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=historico_emails_{start_date}_a_{end_date}.xlsx"},
     )
 
 
