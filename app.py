@@ -868,6 +868,51 @@ def excluir_todos_arquivos_2via(condominio_id):
     return redirect(url_for("arquivos_2via", condominio_id=condominio_id))
 
 
+def _cruzar_unidade_envios(mensagens, start_date, end_date, recipient=None):
+    """Para cada mensagem retornada pela SMTP API, procura na tabela
+    `enviowhatapp` o registro de disparo com o mesmo destinatário e horário
+    mais próximo, e preenche unidade/condomínio de origem."""
+    if not mensagens:
+        return mensagens
+
+    try:
+        envios = supabase_client.listar_envios_email(
+            start_date, f"{end_date}T23:59:59", contato=recipient
+        )
+    except requests.RequestException:
+        return mensagens
+
+    por_contato = {}
+    for envio in envios:
+        try:
+            quando = datetime.fromisoformat(envio["created_at"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        por_contato.setdefault((envio.get("contato") or "").strip().lower(), []).append((quando, envio))
+
+    for m in mensagens:
+        candidatos = por_contato.get((m.get("recipient") or "").strip().lower())
+        if not candidatos or not m.get("sent_at"):
+            continue
+        try:
+            enviado_em = datetime.fromisoformat(m["sent_at"])
+        except (TypeError, ValueError):
+            continue
+
+        melhor_idx, melhor_diff = None, None
+        for idx, (quando, _envio) in enumerate(candidatos):
+            diff = abs((quando - enviado_em).total_seconds())
+            if melhor_diff is None or diff < melhor_diff:
+                melhor_idx, melhor_diff = idx, diff
+
+        if melhor_idx is not None and melhor_diff <= 300:
+            _quando, envio = candidatos.pop(melhor_idx)
+            m["unidade"] = envio.get("unidade")
+            m["condominio_nome"] = envio.get("nomecondominio")
+
+    return mensagens
+
+
 @app.route("/emails/historico")
 def historico_emails():
     status = request.args.get("status", "all")
@@ -895,6 +940,8 @@ def historico_emails():
         )
     except requests.RequestException as e:
         erro = f"Não foi possível consultar o histórico de envios agora: {e}"
+    else:
+        mensagens = _cruzar_unidade_envios(mensagens, start_date, end_date, recipient)
 
     return render_template(
         "historico_emails.html",

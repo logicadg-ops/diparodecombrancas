@@ -238,6 +238,31 @@ def atualizar_unidade(condominio_id, unidade, proprietario, email, fone1=None, f
     resp.raise_for_status()
 
 
+def listar_envios_email(data_inicio, data_fim, contato=None):
+    """Retorna os registros de envio de email (`enviowhatapp`, tipo=email) no
+    período informado, usados para cruzar o histórico da SMTP API com a
+    unidade/condomínio que originou cada disparo."""
+    params = [
+        ("select", "created_at,condominio,nomecondominio,unidade,contato"),
+        ("tipo", "eq.email"),
+        ("created_at", f"gte.{data_inicio}"),
+        ("created_at", f"lte.{data_fim}"),
+        ("order", "created_at.desc"),
+        ("limit", 5000),
+    ]
+    if contato:
+        params.append(("contato", f"ilike.*{contato}*"))
+
+    resp = requests.get(
+        f"{config.SUPABASE_URL}/rest/v1/enviowhatapp",
+        headers=_headers(),
+        params=params,
+        timeout=20,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
 def registrar_envio(
     condominio_id,
     nome_condominio,

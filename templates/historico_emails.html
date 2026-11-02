@@ -44,6 +44,7 @@
       <tr>
         <th>Enviado em</th>
         <th>Destinatário</th>
+        <th>Unidade</th>
         <th>Assunto</th>
         <th>Status</th>
         <th>Aberto em</th>
@@ -55,6 +56,14 @@
         <tr>
           <td>{{ m.sent_at[:16].replace("T", " ") if m.sent_at else "—" }}</td>
           <td>{{ m.recipient }}</td>
+          <td>
+            {% if m.unidade %}
+              {{ m.unidade }}
+              {% if m.condominio_nome %}<div class="muted">{{ m.condominio_nome }}</div>{% endif %}
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
           <td class="quebra">{{ m.subject }}</td>
           <td>
             <span class="badge-status {% if 'entreg' in status_txt %}badge-status-ok{% elif m.hard_bounce or m.bounce_code or 'erro' in status_txt or 'rejeit' in status_txt or 'bloque' in status_txt %}badge-status-erro{% else %}badge-status-outro{% endif %}">
@@ -65,7 +74,7 @@
           <td>{{ m.opened_at[:16].replace("T", " ") if m.opened_at else "—" }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="5">Nenhum envio encontrado para o período e filtros informados.</td></tr>
+        <tr><td colspan="6">Nenhum envio encontrado para o período e filtros informados.</td></tr>
       {% endfor %}
     </tbody>
   </table>
