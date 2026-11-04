@@ -241,12 +241,23 @@ def atualizar_unidade(condominio_id, unidade, proprietario, email, fone1=None, f
 def listar_envios_email(data_inicio, data_fim, contato=None, unidade=None, condominio=None):
     """Retorna os registros de envio de email (`enviowhatapp`, tipo=email) no
     período informado, usados para cruzar o histórico da SMTP API com a
-    unidade/condomínio que originou cada disparo."""
+    unidade/condomínio que originou cada disparo.
+
+    `data_inicio`/`data_fim` são datas/horas no horário local (Brasília,
+    UTC-3); como `created_at` é armazenado em UTC, aplicamos o offset
+    explicitamente (-03:00) para o Postgres converter corretamente — sem
+    isso, envios feitos após ~21h local "vazam" para o dia seguinte em UTC
+    e ficam fora do período filtrado."""
+    def _com_offset(valor):
+        if "T" not in valor:
+            valor = f"{valor}T00:00:00"
+        return valor if "+" in valor or valor.count("-") > 2 else f"{valor}-03:00"
+
     params = [
         ("select", "created_at,condominio,nomecondominio,unidade,contato"),
         ("tipo", "eq.email"),
-        ("created_at", f"gte.{data_inicio}"),
-        ("created_at", f"lte.{data_fim}"),
+        ("created_at", f"gte.{_com_offset(data_inicio)}"),
+        ("created_at", f"lte.{_com_offset(data_fim)}"),
         ("order", "created_at.desc"),
         ("limit", 5000),
     ]
