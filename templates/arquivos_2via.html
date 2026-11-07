@@ -5,11 +5,11 @@
   <p><a href="{{ url_for('ver_condominio_2via', condominio_id=condominio.id) }}">&larr; {{ condominio.nome }} (2ª via)</a></p>
   <h2>
     {{ condominio.nome }} <span class="muted">— Arquivos de 2ª via (R2)</span>
-    <button type="button" id="btn-excluir-todos" class="btn-excluir btn-titulo">Excluir todos</button>
+    <button type="button" id="btn-excluir-todos" class="btn-excluir btn-titulo">Excluir todos do mês</button>
   </h2>
 
   <form method="post" id="form-excluir-todos" style="display:none"
-        action="{{ url_for('excluir_todos_arquivos_2via', condominio_id=condominio.id) }}">
+        action="{{ url_for('excluir_todos_arquivos_2via', condominio_id=condominio.id, mes=mes) }}">
     <input type="hidden" name="confirmacao" id="confirmacao-excluir-todos">
   </form>
 
@@ -24,20 +24,33 @@
         {% endfor %}
       </select>
     </label>
+    <label>
+      Mês dos boletos:
+      <input type="month" id="seletor-mes" value="{{ mes }}">
+    </label>
   </div>
+  <p class="muted">
+    Cada mês tem sua própria pasta de arquivos — assim o boleto de um mês nunca
+    sobrescreve o de outro mesmo com o nome de unidade igual.
+  </p>
   <script>
     document.getElementById('seletor-condominio').addEventListener('change', (ev) => {
-      const baseUrl = "{{ url_for('arquivos_2via', condominio_id=0) }}";
+      const baseUrl = "{{ url_for('arquivos_2via', condominio_id=0, mes=mes) }}";
       window.location.href = baseUrl.replace('/0', '/' + ev.target.value);
+    });
+    document.getElementById('seletor-mes').addEventListener('change', (ev) => {
+      const url = new URL(window.location.href);
+      url.searchParams.set('mes', ev.target.value);
+      window.location.href = url.toString();
     });
 
     document.getElementById('btn-excluir-todos').addEventListener('click', () => {
       const nomeCondominio = {{ condominio.nome|tojson }};
       const digitado = prompt(
         `ATENÇÃO: isso vai excluir PERMANENTEMENTE todos os {{ arquivos|length }} ` +
-        `arquivo(s) de boleto salvos para "${nomeCondominio}". Essa ação não pode ` +
-        `ser desfeita.\n\nPara confirmar, digite o nome do condomínio exatamente ` +
-        `como mostrado abaixo:\n\n${nomeCondominio}`
+        `arquivo(s) de boleto do mês {{ mes }} salvos para "${nomeCondominio}". Essa ` +
+        `ação não afeta outros meses e não pode ser desfeita.\n\nPara confirmar, ` +
+        `digite o nome do condomínio exatamente como mostrado abaixo:\n\n${nomeCondominio}`
       );
       if (digitado === null) return;
       if (digitado.trim() !== nomeCondominio) {
@@ -50,21 +63,22 @@
   </script>
 
   <div class="cartao">
-    <h3>Enviar novos boletos</h3>
+    <h3>Enviar novos boletos — mês {{ mes }}</h3>
     <p class="muted">
       Nomeie cada arquivo exatamente como o código da unidade (ex: <code>01-LT-001.pdf</code>).
-      Se já existir um arquivo com esse nome, ele será substituído — é assim que uma
-      nova emissão de boleto atualiza o link que já foi enviado por email.
+      Se já existir um arquivo com esse nome <strong>no mesmo mês</strong>, ele será
+      substituído; arquivos de outros meses não são afetados.
     </p>
     <p class="muted">Limite máximo: 200MB por envio (somando todos os arquivos selecionados de uma vez).</p>
     <form method="post" action="{{ url_for('upload_arquivo_2via', condominio_id=condominio.id) }}"
           enctype="multipart/form-data">
+      <input type="hidden" name="mes" value="{{ mes }}">
       <input type="file" name="arquivos" accept="application/pdf" multiple required>
       <button type="submit">Enviar arquivo(s)</button>
     </form>
   </div>
 
-  <p class="total-destaque">{{ arquivos|length }} arquivo(s) salvo(s)</p>
+  <p class="total-destaque">{{ arquivos|length }} arquivo(s) salvo(s) para o mês {{ mes }}</p>
 
   <table class="tabela-arquivos">
     <thead>
@@ -84,17 +98,17 @@
           <td>{{ (a.tamanho / 1024) | round(1) }} KB</td>
           <td>{{ a.modificado_em.strftime("%d/%m/%Y %H:%M") }}</td>
           <td>
-            <a href="{{ url_for('boleto_2via_arquivo', condominio_id=condominio.id, unidade=a.unidade) }}"
+            <a href="{{ url_for('boleto_2via_arquivo', condominio_id=condominio.id, unidade=a.unidade, mes=mes) }}"
                class="btn-ver-boleto" target="_blank" rel="noopener">Abrir</a>
             <form method="post" style="display:inline"
-                  action="{{ url_for('excluir_arquivo_2via', condominio_id=condominio.id, unidade=a.unidade) }}"
+                  action="{{ url_for('excluir_arquivo_2via', condominio_id=condominio.id, unidade=a.unidade, mes=mes) }}"
                   onsubmit="return confirm('Excluir o boleto salvo da unidade {{ a.unidade }}? Essa ação não pode ser desfeita.');">
               <button type="submit" class="btn-excluir">Excluir</button>
             </form>
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="5">Nenhum arquivo salvo pra este condomínio ainda.</td></tr>
+        <tr><td colspan="5">Nenhum arquivo salvo pra este condomínio no mês {{ mes }} ainda.</td></tr>
       {% endfor %}
     </tbody>
   </table>

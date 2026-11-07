@@ -125,27 +125,42 @@ def marcar_unidades_com_cobranca(condominio_id, unidades):
     return unidades
 
 
-def _dados_cobranca_2via(condominio_id, unidade, contato):
-    """Verifica se há PDF no R2 pra essa unidade e, quando dá, busca os dados
-    de vencimento/valor/pix na Condomob (best-effort). Não usa url_for, então
-    pode ser chamada de fora do contexto de request (ex: numa thread pool)."""
-    if not r2_client.boleto_existe(condominio_id, unidade):
-        raise r2_client.BoletoNaoEncontrado(f"Sem boleto salvo para a unidade {unidade}")
+def _mes_arquivo(vencimento):
+    """Deriva o mês (YYYY-MM) usado como parte da chave do PDF no R2, a
+    partir de uma data de vencimento ISO ('YYYY-MM-DD')."""
+    return (vencimento or "")[:7] or None
 
+
+def _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override=None):
+    """Busca os dados de vencimento/valor/pix na Condomob (best-effort) e
+    verifica se há PDF no R2 pra essa unidade NO MÊS do vencimento (ou no
+    mês informado em `vencimento_override`, quando o envio já tem uma data
+    escolhida manualmente). Isso evita servir o PDF de um mês antigo quando
+    o boleto do mês atual ainda não foi re-enviado pro R2. Não usa url_for,
+    então pode ser chamada de fora do contexto de request (ex: thread pool)."""
     try:
-        return dict(
+        cobranca = dict(
             condomob.consultar_cobranca_aberta(condominio_id, unidade, contato["cpf_cnpj"])
         )
     except condomob.CobrancaNaoEncontrada:
-        return {"vencimento": None, "valor": None, "pix": "", "linhaDigitavel": ""}
+        cobranca = {"vencimento": None, "valor": None, "pix": "", "linhaDigitavel": ""}
+
+    mes = _mes_arquivo(vencimento_override) or _mes_arquivo(cobranca.get("vencimento"))
+    if not mes or not r2_client.boleto_existe(condominio_id, unidade, mes):
+        raise r2_client.BoletoNaoEncontrado(
+            f"Sem boleto salvo para a unidade {unidade}" + (f" no mês {mes}" if mes else "")
+        )
+    cobranca["mes_arquivo"] = mes
+    return cobranca
 
 
-def _montar_cobranca_2via(condominio_id, unidade, contato):
+def _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=None):
     """Igual a `_dados_cobranca_2via`, mas já inclui o link estável do
     próprio sistema — só pode ser chamada dentro de um contexto de request."""
-    cobranca = _dados_cobranca_2via(condominio_id, unidade, contato)
+    cobranca = _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override)
     cobranca["link"] = url_for(
-        "boleto_2via_arquivo", condominio_id=condominio_id, unidade=unidade, _external=True
+        "boleto_2via_arquivo", condominio_id=condominio_id, unidade=unidade,
+        mes=cobranca["mes_arquivo"], _external=True,
     )
     return cobranca
 
@@ -638,12 +653,14 @@ def ver_condominio_2via(condominio_id):
 
 @app.route("/2via/condominio/<int:condominio_id>/unidade/<unidade>/arquivo")
 def boleto_2via_arquivo(condominio_id, unidade):
-    """Rota estável: sempre busca o PDF mais atual no R2 e redireciona pra
-    ele. É esse link (e não a URL assinada) que vai no email e no botão
-    'Ver boleto', então nunca muda mesmo quando o arquivo é substituído."""
-    if not r2_client.boleto_existe(condominio_id, unidade):
+    """Rota estável: busca no R2 o PDF do mês indicado em `mes` (YYYY-MM) e
+    redireciona pra ele. É esse link (e não a URL assinada) que vai no email
+    e no botão 'Ver boleto'. Sem `mes` na URL (links enviados antes do PDF
+    passar a ser versionado por mês), cai pra chave antiga sem mês."""
+    mes = request.args.get("mes") or None
+    if not r2_client.boleto_existe(condominio_id, unidade, mes):
         abort(404)
-    return redirect(r2_client.gerar_url_download(condominio_id, unidade))
+    return redirect(r2_client.gerar_url_download(condominio_id, unidade, mes))
 
 
 @app.route("/2via/condominio/<int:condominio_id>/unidade/<unidade>/boleto")
@@ -703,7 +720,7 @@ def enviar_individual_2via(condominio_id, unidade):
         return redirect(url_for("ver_condominio_2via", condominio_id=condominio_id))
 
     try:
-        cobranca = _montar_cobranca_2via(condominio_id, unidade, contato)
+        cobranca = _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=vencimento)
     except r2_client.BoletoNaoEncontrado:
         for email in emails:
             _registrar_log_envio(
@@ -779,7 +796,7 @@ def enviar_massa_2via(condominio_id):
             continue
 
         try:
-            cobranca = _montar_cobranca_2via(condominio_id, unidade, contato)
+            cobranca = _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=vencimento)
             email_service.enviar_boleto_2via(
                 contato["email"],
                 contato["nome"],
@@ -801,6 +818,11 @@ def enviar_massa_2via(condominio_id):
     )
 
 
+def _mes_selecionado_arquivos():
+    mes = (request.args.get("mes") or request.form.get("mes") or "").strip()
+    return mes or date.today().strftime("%Y-%m")
+
+
 @app.route("/2via/condominio/<int:condominio_id>/arquivos")
 def arquivos_2via(condominio_id):
     condominio = supabase_client.get_condominio(condominio_id)
@@ -808,7 +830,8 @@ def arquivos_2via(condominio_id):
         flash("Condomínio não encontrado.", "error")
         return redirect(url_for("index"))
 
-    arquivos = r2_client.listar_arquivos(condominio_id)
+    mes = _mes_selecionado_arquivos()
+    arquivos = r2_client.listar_arquivos(condominio_id, mes)
 
     unidades_por_codigo = {
         u.get("unidade"): u for u in supabase_client.get_unidades(condominio_id)
@@ -821,6 +844,7 @@ def arquivos_2via(condominio_id):
         "arquivos_2via.html",
         condominio=condominio,
         arquivos=arquivos,
+        mes=mes,
         condominios=supabase_client.get_condominios(),
     )
 
@@ -832,10 +856,11 @@ def upload_arquivo_2via(condominio_id):
         flash("Condomínio não encontrado.", "error")
         return redirect(url_for("index"))
 
+    mes = _mes_selecionado_arquivos()
     arquivos_enviados = request.files.getlist("arquivos")
     if not arquivos_enviados or all(f.filename == "" for f in arquivos_enviados):
         flash("Selecione ao menos um arquivo PDF pra enviar.", "error")
-        return redirect(url_for("arquivos_2via", condominio_id=condominio_id))
+        return redirect(url_for("arquivos_2via", condominio_id=condominio_id, mes=mes))
 
     enviados, ignorados = [], []
     for arquivo in arquivos_enviados:
@@ -847,24 +872,25 @@ def upload_arquivo_2via(condominio_id):
 
         unidade = arquivo.filename.rsplit(".", 1)[0].strip()
         try:
-            r2_client.enviar_arquivo(condominio_id, unidade, arquivo.stream.read())
+            r2_client.enviar_arquivo(condominio_id, unidade, mes, arquivo.stream.read())
             enviados.append(unidade)
         except Exception as e:
             ignorados.append(f"{arquivo.filename} (erro: {e})")
 
     if enviados:
-        flash(f"Enviado(s) com sucesso: {', '.join(enviados)}.", "success")
+        flash(f"Enviado(s) com sucesso pro mês {mes}: {', '.join(enviados)}.", "success")
     if ignorados:
         flash(f"Não enviado(s): {', '.join(ignorados)}.", "error")
 
-    return redirect(url_for("arquivos_2via", condominio_id=condominio_id))
+    return redirect(url_for("arquivos_2via", condominio_id=condominio_id, mes=mes))
 
 
 @app.route("/2via/condominio/<int:condominio_id>/arquivos/<unidade>/excluir", methods=["POST"])
 def excluir_arquivo_2via(condominio_id, unidade):
-    r2_client.deletar_arquivo(condominio_id, unidade)
-    flash(f"Boleto da unidade {unidade} removido do armazenamento.", "success")
-    return redirect(url_for("arquivos_2via", condominio_id=condominio_id))
+    mes = _mes_selecionado_arquivos()
+    r2_client.deletar_arquivo(condominio_id, unidade, mes)
+    flash(f"Boleto da unidade {unidade} (mês {mes}) removido do armazenamento.", "success")
+    return redirect(url_for("arquivos_2via", condominio_id=condominio_id, mes=mes))
 
 
 @app.route("/2via/condominio/<int:condominio_id>/arquivos/excluir-todos", methods=["POST"])
@@ -874,17 +900,18 @@ def excluir_todos_arquivos_2via(condominio_id):
         flash("Condomínio não encontrado.", "error")
         return redirect(url_for("index"))
 
+    mes = _mes_selecionado_arquivos()
     confirmacao = (request.form.get("confirmacao") or "").strip()
     if confirmacao != condominio["nome"]:
         flash(
             "Exclusão cancelada: o nome digitado não confere com o do condomínio.",
             "error",
         )
-        return redirect(url_for("arquivos_2via", condominio_id=condominio_id))
+        return redirect(url_for("arquivos_2via", condominio_id=condominio_id, mes=mes))
 
-    total = r2_client.deletar_todos_arquivos(condominio_id)
-    flash(f"{total} arquivo(s) excluído(s) da pasta de {condominio['nome']}.", "success")
-    return redirect(url_for("arquivos_2via", condominio_id=condominio_id))
+    total = r2_client.deletar_todos_arquivos(condominio_id, mes)
+    flash(f"{total} arquivo(s) do mês {mes} excluído(s) da pasta de {condominio['nome']}.", "success")
+    return redirect(url_for("arquivos_2via", condominio_id=condominio_id, mes=mes))
 
 
 def _cruzar_unidade_envios(mensagens, envios):

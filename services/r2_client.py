@@ -26,14 +26,21 @@ def _s3():
     return _client
 
 
-def _chave(condominio_id, unidade):
+def _chave(condominio_id, unidade, mes_referencia=None):
+    """A chave inclui o mês (YYYY-MM) desde que o boleto de cada mês passou a
+    ser versionado — isso evita que a emissão de um novo mês "pise" no PDF
+    do mês anterior quando ambos têm o mesmo nome de unidade. `mes_referencia`
+    é opcional só pra resolver links antigos (enviados por email antes dessa
+    mudança), que apontavam pra chave "achatada" sem mês."""
+    if mes_referencia:
+        return f"{condominio_id}/{mes_referencia}/{unidade}.pdf"
     return f"{condominio_id}/{unidade}.pdf"
 
 
-def boleto_existe(condominio_id, unidade):
+def boleto_existe(condominio_id, unidade, mes_referencia=None):
     try:
         _s3().head_object(
-            Bucket=config.R2_BUCKET_NAME, Key=_chave(condominio_id, unidade)
+            Bucket=config.R2_BUCKET_NAME, Key=_chave(condominio_id, unidade, mes_referencia)
         )
         return True
     except ClientError as e:
@@ -42,27 +49,27 @@ def boleto_existe(condominio_id, unidade):
         raise
 
 
-def gerar_url_download(condominio_id, unidade, expira_em=3600):
-    """Gera uma URL assinada temporária apontando para o PDF mais atual no R2.
+def gerar_url_download(condominio_id, unidade, mes_referencia=None, expira_em=3600):
+    """Gera uma URL assinada temporária apontando pro PDF do mês indicado.
 
     Deve ser chamada sob demanda (ex: numa rota que redireciona pra ela),
     nunca armazenada, já que o arquivo pode ser substituído a qualquer
-    momento por uma nova emissão do boleto.
+    momento por uma nova emissão do boleto daquele mesmo mês.
     """
     return _s3().generate_presigned_url(
         "get_object",
-        Params={"Bucket": config.R2_BUCKET_NAME, "Key": _chave(condominio_id, unidade)},
+        Params={"Bucket": config.R2_BUCKET_NAME, "Key": _chave(condominio_id, unidade, mes_referencia)},
         ExpiresIn=expira_em,
     )
 
 
-def listar_arquivos(condominio_id):
-    """Lista os PDFs salvos pra um condomínio, com unidade, tamanho e data
-    da última modificação (útil pra saber se um boleto já foi atualizado)."""
+def listar_arquivos(condominio_id, mes_referencia):
+    """Lista os PDFs salvos pra um condomínio num mês específico, com
+    unidade, tamanho e data da última modificação."""
     arquivos = []
     paginator = _s3().get_paginator("list_objects_v2")
     for pagina in paginator.paginate(
-        Bucket=config.R2_BUCKET_NAME, Prefix=f"{condominio_id}/"
+        Bucket=config.R2_BUCKET_NAME, Prefix=f"{condominio_id}/{mes_referencia}/"
     ):
         for obj in pagina.get("Contents", []):
             chave = obj["Key"]
@@ -82,29 +89,29 @@ def listar_arquivos(condominio_id):
     return arquivos
 
 
-def enviar_arquivo(condominio_id, unidade, arquivo_bytes, content_type="application/pdf"):
-    """Envia (ou substitui) o PDF de uma unidade no R2."""
+def enviar_arquivo(condominio_id, unidade, mes_referencia, arquivo_bytes, content_type="application/pdf"):
+    """Envia (ou substitui) o PDF de uma unidade no R2, pro mês indicado."""
     _s3().put_object(
         Bucket=config.R2_BUCKET_NAME,
-        Key=_chave(condominio_id, unidade),
+        Key=_chave(condominio_id, unidade, mes_referencia),
         Body=arquivo_bytes,
         ContentType=content_type,
     )
 
 
-def deletar_arquivo(condominio_id, unidade):
-    _s3().delete_object(Bucket=config.R2_BUCKET_NAME, Key=_chave(condominio_id, unidade))
+def deletar_arquivo(condominio_id, unidade, mes_referencia):
+    _s3().delete_object(Bucket=config.R2_BUCKET_NAME, Key=_chave(condominio_id, unidade, mes_referencia))
 
 
-def deletar_todos_arquivos(condominio_id):
-    """Exclui TODOS os PDFs salvos pra um condomínio (toda a pasta
-    {condominio_id}/ no bucket). Irreversível. Retorna quantos foram
-    excluídos."""
+def deletar_todos_arquivos(condominio_id, mes_referencia):
+    """Exclui TODOS os PDFs salvos pra um condomínio num mês específico
+    (a pasta {condominio_id}/{mes_referencia}/ no bucket). Irreversível.
+    Retorna quantos foram excluídos."""
     s3 = _s3()
     total_excluidos = 0
     paginator = s3.get_paginator("list_objects_v2")
     for pagina in paginator.paginate(
-        Bucket=config.R2_BUCKET_NAME, Prefix=f"{condominio_id}/"
+        Bucket=config.R2_BUCKET_NAME, Prefix=f"{condominio_id}/{mes_referencia}/"
     ):
         chaves = [{"Key": obj["Key"]} for obj in pagina.get("Contents", [])]
         if not chaves:
