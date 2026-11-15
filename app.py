@@ -15,6 +15,7 @@ from services import (
     r2_client,
     relatorio_emails,
     supabase_client,
+    whatsapp_service,
 )
 
 app = Flask(__name__)
@@ -439,6 +440,7 @@ def ver_condominio(condominio_id):
         meses=meses,
         mes_selecionado=mes_selecionado,
         condominios=supabase_client.get_condominios(),
+        whatsapp_ativo=whatsapp_service.whatsapp_configurado(),
     )
 
 
@@ -512,8 +514,8 @@ def _mes_referencia_de_data(data_iso):
         return None
 
 
-def _registrar_log_envio(condominio, unidade, contato_email, sucesso, mensagem_erro=None,
-                          mes_referencia=None, cobranca=None):
+def _registrar_log_envio(condominio, unidade, contato, sucesso, mensagem_erro=None,
+                          mes_referencia=None, cobranca=None, tipo="email"):
     cobranca = cobranca or {}
     try:
         supabase_client.registrar_envio(
@@ -522,8 +524,8 @@ def _registrar_log_envio(condominio, unidade, contato_email, sucesso, mensagem_e
             unidade=unidade,
             mes_referencia=mes_referencia or _mes_referencia_de_data(cobranca.get("vencimento")),
             sucesso=sucesso,
-            contato=contato_email,
-            tipo="email",
+            contato=contato,
+            tipo=tipo,
             mensagem_erro=mensagem_erro,
             valor=cobranca.get("valor"),
             link=cobranca.get("link"),
@@ -534,63 +536,157 @@ def _registrar_log_envio(condominio, unidade, contato_email, sucesso, mensagem_e
         app.logger.exception("Falha ao registrar log de envio na tabela enviowhatapp")
 
 
+# ---------------------------------------------------------------------------
+# Canal de envio: email, WhatsApp ou os dois
+# ---------------------------------------------------------------------------
+
+CANAIS = ("email", "whatsapp", "ambos")
+
+
+def _canal_da_requisicao():
+    canal = (request.values.get("canal") or "email").strip().lower()
+    return canal if canal in CANAIS else "email"
+
+
+def _usa_email(canal):
+    return canal in ("email", "ambos")
+
+
+def _usa_whatsapp(canal):
+    return canal in ("whatsapp", "ambos")
+
+
+def _validar_destinos(canal, unidade, emails, telefones):
+    """Confere se a unidade tem para onde enviar no canal escolhido.
+    Devolve a mensagem de erro, ou None se estiver tudo certo."""
+    if _usa_whatsapp(canal) and not whatsapp_service.whatsapp_configurado():
+        return "Envio por WhatsApp não configurado (falta a variável COEXY_CHANNEL_TOKEN)."
+    if canal == "email" and not emails:
+        return f"Unidade {unidade} não tem email cadastrado."
+    if canal == "whatsapp" and not telefones:
+        return f"Unidade {unidade} não tem telefone (fone1/fone2) válido cadastrado."
+    if canal == "ambos" and not emails and not telefones:
+        return f"Unidade {unidade} não tem email nem telefone cadastrado."
+    return None
+
+
+def _enviar_whatsapp_unidade(condominio, unidade, telefones, contato, obter_pdf,
+                             referencia, vencimento, valor, linha_digitavel,
+                             mes_referencia_log=None, cobranca_log=None):
+    """Sobe o PDF uma vez para a Coexy e envia o template para cada telefone.
+    Devolve (enviados, ja_enviados, falhas)."""
+    enviados, ja_enviados, falhas = [], [], []
+    cobranca_log = cobranca_log or {}
+    try:
+        nome_arquivo = whatsapp_service.nome_arquivo_boleto(unidade, vencimento)
+        media_id = whatsapp_service.subir_pdf(obter_pdf(), nome_arquivo)
+    except (whatsapp_service.EnvioWhatsappFalhou, r2_client.BoletoNaoEncontrado,
+            requests.RequestException) as e:
+        for telefone in telefones:
+            _registrar_log_envio(condominio, unidade, telefone, False, mensagem_erro=str(e),
+                                 mes_referencia=mes_referencia_log, cobranca=cobranca_log, tipo="whatsapp")
+            falhas.append((whatsapp_service.formatar_telefone(telefone), str(e)))
+        return enviados, ja_enviados, falhas
+
+    for telefone in telefones:
+        legivel = whatsapp_service.formatar_telefone(telefone)
+        try:
+            whatsapp_service.enviar_boleto(
+                telefone, media_id, nome_arquivo, contato["nome"], condominio["nome"],
+                referencia, unidade, valor, vencimento, linha_digitavel,
+            )
+            _registrar_log_envio(condominio, unidade, telefone, True,
+                                 mes_referencia=mes_referencia_log, cobranca=cobranca_log, tipo="whatsapp")
+            enviados.append(legivel)
+        except whatsapp_service.BoletoJaEnviado:
+            ja_enviados.append(legivel)
+        except (whatsapp_service.EnvioWhatsappFalhou, requests.RequestException) as e:
+            _registrar_log_envio(condominio, unidade, telefone, False, mensagem_erro=str(e),
+                                 mes_referencia=mes_referencia_log, cobranca=cobranca_log, tipo="whatsapp")
+            falhas.append((legivel, str(e)))
+    return enviados, ja_enviados, falhas
+
+
+def _resumo_envio(unidade, enviados, ja_enviados, falhas):
+    """Monta (sucesso, mensagem) a partir do resultado dos dois canais."""
+    partes = []
+    if enviados:
+        partes.append(f"Boleto enviado para {', '.join(enviados)} (unidade {unidade}).")
+    if ja_enviados:
+        partes.append(f"Já tinha sido enviado antes para {', '.join(ja_enviados)} (não reenviado).")
+    if falhas:
+        partes.append("Falha para: " + "; ".join(f"{destino}: {erro}" for destino, erro in falhas))
+    sucesso = bool(enviados or ja_enviados) and not falhas
+    return sucesso, " ".join(partes) or f"Nada enviado para a unidade {unidade}."
+
+
+def _responder_envio(sucesso, mensagem, status_erro, rota_volta, condominio_id):
+    if _quer_json():
+        return (jsonify(sucesso=True, mensagem=mensagem) if sucesso
+                else (jsonify(sucesso=False, mensagem=mensagem), status_erro))
+    flash(mensagem, "success" if sucesso else "error")
+    return redirect(url_for(rota_volta, condominio_id=condominio_id))
+
+
+def _processar_envio_ao_vivo(condominio, unidade_row, canal):
+    """Envia o boleto em aberto (Condomob) de uma unidade pelos canais
+    escolhidos. Devolve (sucesso, mensagem, status_http_se_erro)."""
+    unidade = unidade_row.get("unidade")
+    contato = contato_da_unidade(unidade_row)
+    emails = emails_da_unidade(unidade_row) if _usa_email(canal) else []
+    telefones = whatsapp_service.telefones_da_unidade(unidade_row) if _usa_whatsapp(canal) else []
+
+    erro = _validar_destinos(canal, unidade, emails, telefones)
+    if erro:
+        return False, erro, 400
+
+    try:
+        cobranca = condomob.consultar_cobranca_aberta(condominio["id"], unidade, contato["cpf_cnpj"])
+    except condomob.CobrancaNaoEncontrada:
+        for email in emails:
+            _registrar_log_envio(condominio, unidade, email, False, mensagem_erro="Sem cobrança em aberto")
+        for telefone in telefones:
+            _registrar_log_envio(condominio, unidade, telefone, False,
+                                 mensagem_erro="Sem cobrança em aberto", tipo="whatsapp")
+        return False, f"Unidade {unidade} não possui cobrança em aberto.", 400
+
+    enviados, ja_enviados, falhas = [], [], []
+    for email in emails:
+        try:
+            email_service.enviar_boleto(email, contato["nome"], unidade, cobranca, condominio["nome"])
+            _registrar_log_envio(condominio, unidade, email, True, cobranca=cobranca)
+            enviados.append(email)
+        except email_service.EnvioEmailFalhou as e:
+            _registrar_log_envio(condominio, unidade, email, False, mensagem_erro=str(e), cobranca=cobranca)
+            falhas.append((email, str(e)))
+
+    if telefones:
+        w_env, w_ja, w_falhas = _enviar_whatsapp_unidade(
+            condominio, unidade, telefones, contato,
+            obter_pdf=lambda: whatsapp_service.baixar_pdf(cobranca.get("link")),
+            referencia=_mes_referencia_de_data(cobranca.get("vencimento")) or "-",
+            vencimento=cobranca.get("vencimento"),
+            valor=cobranca.get("valor"),
+            linha_digitavel=cobranca.get("linhaDigitavel"),
+            cobranca_log=cobranca,
+        )
+        enviados += w_env
+        ja_enviados += w_ja
+        falhas += w_falhas
+
+    sucesso, mensagem = _resumo_envio(unidade, enviados, ja_enviados, falhas)
+    return sucesso, mensagem, 502
+
+
 @app.route("/condominio/<int:condominio_id>/unidade/<unidade>/enviar", methods=["POST"])
 def enviar_individual(condominio_id, unidade):
     condominio = supabase_client.get_condominio(condominio_id)
     unidade_row = supabase_client.get_unidade(condominio_id, unidade)
     if not condominio or not unidade_row:
-        msg = "Unidade não encontrada."
-        if _quer_json():
-            return jsonify(sucesso=False, mensagem=msg), 404
-        flash(msg, "error")
-        return redirect(url_for("ver_condominio", condominio_id=condominio_id))
+        return _responder_envio(False, "Unidade não encontrada.", 404, "ver_condominio", condominio_id)
 
-    contato = contato_da_unidade(unidade_row)
-    emails = emails_da_unidade(unidade_row)
-    if not emails:
-        msg = f"Unidade {unidade} não tem email cadastrado."
-        if _quer_json():
-            return jsonify(sucesso=False, mensagem=msg), 400
-        flash(msg, "error")
-        return redirect(url_for("ver_condominio", condominio_id=condominio_id))
-
-    try:
-        cobranca = condomob.consultar_cobranca_aberta(
-            condominio_id, unidade, contato["cpf_cnpj"]
-        )
-    except condomob.CobrancaNaoEncontrada:
-        for email in emails:
-            _registrar_log_envio(
-                condominio, unidade, email, False, mensagem_erro="Sem cobrança em aberto"
-            )
-        msg = f"Unidade {unidade} não possui cobrança em aberto."
-        if _quer_json():
-            return jsonify(sucesso=False, mensagem=msg), 400
-        flash(msg, "error")
-        return redirect(url_for("ver_condominio", condominio_id=condominio_id))
-
-    falhas = []
-    for email in emails:
-        try:
-            email_service.enviar_boleto(email, contato["nome"], unidade, cobranca, condominio["nome"])
-            _registrar_log_envio(condominio, unidade, email, True, cobranca=cobranca)
-        except email_service.EnvioEmailFalhou as e:
-            _registrar_log_envio(condominio, unidade, email, False, mensagem_erro=str(e), cobranca=cobranca)
-            falhas.append((email, str(e)))
-
-    if not falhas:
-        msg = f"Boleto enviado para {', '.join(emails)} (unidade {unidade})."
-        if _quer_json():
-            return jsonify(sucesso=True, mensagem=msg)
-        flash(msg, "success")
-    else:
-        detalhe = "; ".join(f"{email}: {erro}" for email, erro in falhas)
-        msg = f"Falha ao enviar email da unidade {unidade} para: {detalhe}"
-        if _quer_json():
-            return jsonify(sucesso=False, mensagem=msg), 502
-        flash(msg, "error")
-
-    return redirect(url_for("ver_condominio", condominio_id=condominio_id))
+    sucesso, mensagem, status = _processar_envio_ao_vivo(condominio, unidade_row, _canal_da_requisicao())
+    return _responder_envio(sucesso, mensagem, status, "ver_condominio", condominio_id)
 
 
 @app.route("/condominio/<int:condominio_id>/enviar-massa", methods=["POST"])
@@ -600,29 +696,11 @@ def enviar_massa(condominio_id):
         flash("Condomínio não encontrado.", "error")
         return redirect(url_for("index"))
 
-    unidades = supabase_client.get_unidades(condominio_id)
+    canal = _canal_da_requisicao()
     resultados = []
-
-    for unidade_row in unidades:
-        unidade = unidade_row.get("unidade")
-        contato = contato_da_unidade(unidade_row)
-
-        if not contato["email"]:
-            resultados.append({"unidade": unidade, "status": "sem email cadastrado"})
-            continue
-
-        try:
-            cobranca = condomob.consultar_cobranca_aberta(
-                condominio_id, unidade, contato["cpf_cnpj"]
-            )
-            email_service.enviar_boleto(
-                contato["email"], contato["nome"], unidade, cobranca, condominio["nome"]
-            )
-            resultados.append({"unidade": unidade, "status": "enviado"})
-        except condomob.CobrancaNaoEncontrada:
-            resultados.append({"unidade": unidade, "status": "sem cobrança em aberto"})
-        except email_service.EnvioEmailFalhou as e:
-            resultados.append({"unidade": unidade, "status": f"erro: {e}"})
+    for unidade_row in supabase_client.get_unidades(condominio_id):
+        _, mensagem, _ = _processar_envio_ao_vivo(condominio, unidade_row, canal)
+        resultados.append({"unidade": unidade_row.get("unidade"), "status": mensagem})
 
     return render_template(
         "resultado_envio.html", condominio=condominio, resultados=resultados
@@ -648,6 +726,7 @@ def ver_condominio_2via(condominio_id):
         mes_selecionado=mes_selecionado,
         administradora_padrao=config.EMAIL_REMETENTE_NOME,
         condominios=supabase_client.get_condominios(),
+        whatsapp_ativo=whatsapp_service.whatsapp_configurado(),
     )
 
 
@@ -689,85 +768,97 @@ def ver_boleto_2via(condominio_id, unidade):
     )
 
 
-@app.route("/2via/condominio/<int:condominio_id>/unidade/<unidade>/enviar", methods=["POST"])
-def enviar_individual_2via(condominio_id, unidade):
-    condominio = supabase_client.get_condominio(condominio_id)
-    unidade_row = supabase_client.get_unidade(condominio_id, unidade)
-    if not condominio or not unidade_row:
-        msg = "Unidade não encontrada."
-        if _quer_json():
-            return jsonify(sucesso=False, mensagem=msg), 404
-        flash(msg, "error")
-        return redirect(url_for("ver_condominio_2via", condominio_id=condominio_id))
-
+def _processar_envio_2via(condominio, unidade_row, canal, mes_referencia, administradora, vencimento):
+    """Envia o PDF de 2ª via salvo no R2 pelos canais escolhidos.
+    Devolve (sucesso, mensagem, status_http_se_erro). Precisa de contexto de
+    request (o link do email usa url_for)."""
+    unidade = unidade_row.get("unidade")
+    condominio_id = condominio["id"]
     contato = contato_da_unidade(unidade_row)
-    emails = emails_da_unidade(unidade_row)
-    if not emails:
-        msg = f"Unidade {unidade} não tem email cadastrado."
-        if _quer_json():
-            return jsonify(sucesso=False, mensagem=msg), 400
-        flash(msg, "error")
-        return redirect(url_for("ver_condominio_2via", condominio_id=condominio_id))
+    emails = emails_da_unidade(unidade_row) if _usa_email(canal) else []
+    telefones = whatsapp_service.telefones_da_unidade(unidade_row) if _usa_whatsapp(canal) else []
 
-    mes_referencia = (request.values.get("mes_referencia") or "").strip()
-    administradora = (request.values.get("administradora") or "").strip()
-    vencimento = (request.values.get("vencimento") or "").strip()
-    if not mes_referencia or not administradora or not vencimento:
-        msg = "Preencha o mês de referência, a administradora e o vencimento antes de enviar."
-        if _quer_json():
-            return jsonify(sucesso=False, mensagem=msg), 400
-        flash(msg, "error")
-        return redirect(url_for("ver_condominio_2via", condominio_id=condominio_id))
+    erro = _validar_destinos(canal, unidade, emails, telefones)
+    if erro:
+        return False, erro, 400
 
     try:
         cobranca = _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=vencimento)
     except r2_client.BoletoNaoEncontrado:
         for email in emails:
-            _registrar_log_envio(
-                condominio, unidade, email, False,
-                mensagem_erro="Sem boleto de 2ª via salvo", mes_referencia=mes_referencia,
-                cobranca={"vencimento": vencimento},
-            )
-        msg = f"Unidade {unidade} não possui boleto de 2ª via salvo."
-        if _quer_json():
-            return jsonify(sucesso=False, mensagem=msg), 400
-        flash(msg, "error")
-        return redirect(url_for("ver_condominio_2via", condominio_id=condominio_id))
+            _registrar_log_envio(condominio, unidade, email, False, mensagem_erro="Sem boleto de 2ª via salvo",
+                                 mes_referencia=mes_referencia, cobranca={"vencimento": vencimento})
+        for telefone in telefones:
+            _registrar_log_envio(condominio, unidade, telefone, False, mensagem_erro="Sem boleto de 2ª via salvo",
+                                 mes_referencia=mes_referencia, cobranca={"vencimento": vencimento}, tipo="whatsapp")
+        return False, f"Unidade {unidade} não possui boleto de 2ª via salvo.", 400
 
     link_arquivo_real = r2_client.gerar_url_download(condominio_id, unidade)
+    cobranca_log = {**cobranca, "vencimento": vencimento, "link": link_arquivo_real}
 
-    falhas = []
+    enviados, ja_enviados, falhas = [], [], []
     for email in emails:
         try:
             email_service.enviar_boleto_2via(
                 email, contato["nome"], unidade, cobranca["link"],
                 mes_referencia, vencimento, condominio["nome"], administradora,
             )
-            _registrar_log_envio(
-                condominio, unidade, email, True, mes_referencia=mes_referencia,
-                cobranca={**cobranca, "vencimento": vencimento, "link": link_arquivo_real},
-            )
+            _registrar_log_envio(condominio, unidade, email, True, mes_referencia=mes_referencia,
+                                 cobranca=cobranca_log)
+            enviados.append(email)
         except email_service.EnvioEmailFalhou as e:
-            _registrar_log_envio(
-                condominio, unidade, email, False, mensagem_erro=str(e),
-                mes_referencia=mes_referencia,
-                cobranca={**cobranca, "vencimento": vencimento, "link": link_arquivo_real},
-            )
+            _registrar_log_envio(condominio, unidade, email, False, mensagem_erro=str(e),
+                                 mes_referencia=mes_referencia, cobranca=cobranca_log)
             falhas.append((email, str(e)))
 
-    if not falhas:
-        msg = f"Boleto enviado para {', '.join(emails)} (unidade {unidade})."
-        if _quer_json():
-            return jsonify(sucesso=True, mensagem=msg)
-        flash(msg, "success")
-    else:
-        detalhe = "; ".join(f"{email}: {erro}" for email, erro in falhas)
-        msg = f"Falha ao enviar email da unidade {unidade} para: {detalhe}"
-        if _quer_json():
-            return jsonify(sucesso=False, mensagem=msg), 502
-        flash(msg, "error")
+    if telefones:
+        # Valor e linha digitável só entram se a cobrança do Condomob for a
+        # mesma do PDF (mesmo vencimento); senão o morador vê "-" e usa o PDF.
+        mesma_cobranca = (cobranca.get("vencimento") or "")[:10] == (vencimento or "")[:10]
+        w_env, w_ja, w_falhas = _enviar_whatsapp_unidade(
+            condominio, unidade, telefones, contato,
+            obter_pdf=lambda: r2_client.baixar_arquivo(condominio_id, unidade, cobranca["mes_arquivo"]),
+            referencia=mes_referencia,
+            vencimento=vencimento,
+            valor=cobranca.get("valor") if mesma_cobranca else None,
+            linha_digitavel=cobranca.get("linhaDigitavel") if mesma_cobranca else None,
+            mes_referencia_log=mes_referencia,
+            cobranca_log=cobranca_log,
+        )
+        enviados += w_env
+        ja_enviados += w_ja
+        falhas += w_falhas
 
-    return redirect(url_for("ver_condominio_2via", condominio_id=condominio_id))
+    sucesso, mensagem = _resumo_envio(unidade, enviados, ja_enviados, falhas)
+    return sucesso, mensagem, 502
+
+
+def _campos_2via():
+    return (
+        (request.values.get("mes_referencia") or "").strip(),
+        (request.values.get("administradora") or "").strip(),
+        (request.values.get("vencimento") or "").strip(),
+    )
+
+
+@app.route("/2via/condominio/<int:condominio_id>/unidade/<unidade>/enviar", methods=["POST"])
+def enviar_individual_2via(condominio_id, unidade):
+    condominio = supabase_client.get_condominio(condominio_id)
+    unidade_row = supabase_client.get_unidade(condominio_id, unidade)
+    if not condominio or not unidade_row:
+        return _responder_envio(False, "Unidade não encontrada.", 404, "ver_condominio_2via", condominio_id)
+
+    mes_referencia, administradora, vencimento = _campos_2via()
+    if not mes_referencia or not administradora or not vencimento:
+        return _responder_envio(
+            False, "Preencha o mês de referência, a administradora e o vencimento antes de enviar.",
+            400, "ver_condominio_2via", condominio_id,
+        )
+
+    sucesso, mensagem, status = _processar_envio_2via(
+        condominio, unidade_row, _canal_da_requisicao(), mes_referencia, administradora, vencimento
+    )
+    return _responder_envio(sucesso, mensagem, status, "ver_condominio_2via", condominio_id)
 
 
 @app.route("/2via/condominio/<int:condominio_id>/enviar-massa", methods=["POST"])
@@ -777,41 +868,18 @@ def enviar_massa_2via(condominio_id):
         flash("Condomínio não encontrado.", "error")
         return redirect(url_for("index"))
 
-    mes_referencia = (request.form.get("mes_referencia") or "").strip()
-    administradora = (request.form.get("administradora") or "").strip()
-    vencimento = (request.form.get("vencimento") or "").strip()
+    mes_referencia, administradora, vencimento = _campos_2via()
     if not mes_referencia or not administradora or not vencimento:
         flash("Preencha o mês de referência, a administradora e o vencimento antes de enviar.", "error")
         return redirect(url_for("ver_condominio_2via", condominio_id=condominio_id))
 
-    unidades = supabase_client.get_unidades(condominio_id)
+    canal = _canal_da_requisicao()
     resultados = []
-
-    for unidade_row in unidades:
-        unidade = unidade_row.get("unidade")
-        contato = contato_da_unidade(unidade_row)
-
-        if not contato["email"]:
-            resultados.append({"unidade": unidade, "status": "sem email cadastrado"})
-            continue
-
-        try:
-            cobranca = _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=vencimento)
-            email_service.enviar_boleto_2via(
-                contato["email"],
-                contato["nome"],
-                unidade,
-                cobranca["link"],
-                mes_referencia,
-                vencimento,
-                condominio["nome"],
-                administradora,
-            )
-            resultados.append({"unidade": unidade, "status": "enviado"})
-        except r2_client.BoletoNaoEncontrado:
-            resultados.append({"unidade": unidade, "status": "sem boleto de 2ª via salvo"})
-        except email_service.EnvioEmailFalhou as e:
-            resultados.append({"unidade": unidade, "status": f"erro: {e}"})
+    for unidade_row in supabase_client.get_unidades(condominio_id):
+        _, mensagem, _ = _processar_envio_2via(
+            condominio, unidade_row, canal, mes_referencia, administradora, vencimento
+        )
+        resultados.append({"unidade": unidade_row.get("unidade"), "status": mensagem})
 
     return render_template(
         "resultado_envio.html", condominio=condominio, resultados=resultados

@@ -44,6 +44,13 @@ R2_ENDPOINT_URL = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
 FLASK_SECRET_KEY = _env("FLASK_SECRET_KEY", "dev")
 
+# WhatsApp Oficial (Coexy). Sem o token, o envio por WhatsApp fica desativado
+# na tela (o envio por email continua funcionando normalmente).
+COEXY_CHANNEL_TOKEN = _env("COEXY_CHANNEL_TOKEN")
+COEXY_PHONE_NUMBER_ID = _env("COEXY_PHONE_NUMBER_ID", "529844196870875")
+COEXY_META_PROXY_URL = _env("COEXY_META_PROXY_URL", "https://api.coexy.com.br/functions/v1/meta-proxy").rstrip("/")
+COEXY_TEMPLATE_BOLETO = _env("COEXY_TEMPLATE_BOLETO", "boleto_condominio_pdf")
+
 
 def load_condominios():
     with open(BASE_DIR / "config" / "condominios.json", encoding="utf-8") as f:

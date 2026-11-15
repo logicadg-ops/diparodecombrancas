@@ -43,8 +43,16 @@
       Vencimento:
       <input type="date" id="campo-vencimento" required>
     </label>
+    <label>
+      Enviar por:
+      <select id="canal-envio">
+        <option value="email">E-mail</option>
+        <option value="whatsapp" {% if not whatsapp_ativo %}disabled{% endif %}>WhatsApp{% if not whatsapp_ativo %} (não configurado){% endif %}</option>
+        <option value="ambos" {% if not whatsapp_ativo %}disabled{% endif %}>E-mail e WhatsApp</option>
+      </select>
+    </label>
   </div>
-  <p class="muted">Preencha os campos acima antes de enviar — eles vão pro corpo do email.</p>
+  <p class="muted">Preencha os campos acima antes de enviar — eles vão pro corpo do email e da mensagem de WhatsApp.</p>
 
   <form method="post" action="{{ url_for('enviar_massa_2via', condominio_id=condominio.id) }}"
         id="form-enviar-massa">
@@ -78,6 +86,7 @@
         <th>Unidade</th>
         <th>Proprietário</th>
         <th>Email</th>
+        <th>WhatsApp</th>
         <th>Ações</th>
       </tr>
     </thead>
@@ -91,16 +100,17 @@
                class="icone-editar" title="Editar nome e email da unidade">✏️</a>
           </td>
           <td>{{ u.email or "—" }}</td>
+          <td>{{ [u.fone1, u.fone2]|select|join(" / ") or "—" }}</td>
           <td>
             <a href="{{ url_for('ver_boleto_2via', condominio_id=condominio.id, unidade=u.unidade) }}" class="btn-ver-boleto">Ver boleto</a>
             <form method="post" style="display:inline" class="form-enviar-unidade"
                   action="{{ url_for('enviar_individual_2via', condominio_id=condominio.id, unidade=u.unidade) }}">
-              <button type="submit" class="btn-enviar-unidade">Enviar por email</button>
+              <button type="submit" class="btn-enviar-unidade">Enviar boleto</button>
             </form>
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="4">Nenhuma unidade com boleto de 2ª via salvo para este condomínio.</td></tr>
+        <tr><td colspan="5">Nenhuma unidade com boleto de 2ª via salvo para este condomínio.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -152,6 +162,7 @@
         mes_referencia: campoMesReferencia.value.trim(),
         administradora: campoAdministradora.value.trim(),
         vencimento: campoVencimento.value,
+        canal: document.getElementById('canal-envio').value,
       });
 
       try {
@@ -170,13 +181,13 @@
         botao.disabled = false;
         botao.textContent = 'Erro ao enviar';
         botao.classList.add('btn-erro');
-        if (mostrarAlertaDeErro) alert(dados.mensagem || 'Falha ao enviar o email.');
+        if (mostrarAlertaDeErro) alert(dados.mensagem || 'Falha ao enviar o boleto.');
         return false;
       } catch (err) {
         botao.disabled = false;
         botao.textContent = 'Erro ao enviar';
         botao.classList.add('btn-erro');
-        if (mostrarAlertaDeErro) alert('Falha ao enviar o email: ' + err);
+        if (mostrarAlertaDeErro) alert('Falha ao enviar o boleto: ' + err);
         return false;
       }
     }
@@ -184,7 +195,14 @@
     document.getElementById('form-enviar-massa').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       if (!camposPreenchidos()) return;
-      if (!confirm('Enviar boletos (2ª via) por email para todas as unidades com PDF salvo?')) return;
+      const canalSel = document.getElementById('canal-envio');
+      const nomeCanal = canalSel.options[canalSel.selectedIndex].text;
+      const total = document.querySelectorAll('.form-enviar-unidade').length;
+      let aviso = `Enviar boletos (2ª via) por ${nomeCanal} para todas as ${total} unidades com PDF salvo?`;
+      if (canalSel.value !== 'email' && total > 200) {
+        aviso += '\n\nAtenção: o número de WhatsApp pode iniciar no máximo 250 conversas por dia enquanto a conta não for verificada na Meta. Acima disso os envios falham.';
+      }
+      if (!confirm(aviso)) return;
 
       const formularios = document.querySelectorAll('.form-enviar-unidade');
       for (const form of formularios) {

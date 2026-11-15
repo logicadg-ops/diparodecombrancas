@@ -63,6 +63,20 @@ def gerar_url_download(condominio_id, unidade, mes_referencia=None, expira_em=36
     )
 
 
+def baixar_arquivo(condominio_id, unidade, mes_referencia=None):
+    """Lê os bytes do PDF salvo (usado no envio por WhatsApp, que precisa
+    subir o arquivo para a Coexy)."""
+    try:
+        obj = _s3().get_object(
+            Bucket=config.R2_BUCKET_NAME, Key=_chave(condominio_id, unidade, mes_referencia)
+        )
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ("404", "NoSuchKey"):
+            raise BoletoNaoEncontrado(f"Sem boleto salvo para a unidade {unidade}")
+        raise
+    return obj["Body"].read()
+
+
 def listar_arquivos(condominio_id, mes_referencia):
     """Lista os PDFs salvos pra um condomínio num mês específico, com
     unidade, tamanho e data da última modificação."""

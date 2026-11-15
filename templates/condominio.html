@@ -50,6 +50,14 @@
           {% endfor %}
         </select>
       </label>
+      <label class="ct-campo">
+        <span>Enviar por</span>
+        <select id="canal-envio">
+          <option value="email">E-mail</option>
+          <option value="whatsapp" {% if not whatsapp_ativo %}disabled{% endif %}>WhatsApp{% if not whatsapp_ativo %} (não configurado){% endif %}</option>
+          <option value="ambos" {% if not whatsapp_ativo %}disabled{% endif %}>E-mail e WhatsApp</option>
+        </select>
+      </label>
       <form id="form-enviar-massa" class="ct-form-massa">
         <button type="submit" class="ct-btn-massa">Enviar boletos em massa</button>
       </form>
@@ -66,6 +74,7 @@
           <th>Bloco / Apto</th>
           <th>Proprietário</th>
           <th>Email</th>
+          <th>WhatsApp</th>
           <th>Ações</th>
         </tr>
       </thead>
@@ -80,16 +89,17 @@
                  class="icone-editar" title="Editar nome e email da unidade">✏️</a>
             </td>
             <td class="ct-email">{{ u.email or "—" }}</td>
+            <td class="ct-email">{{ [u.fone1, u.fone2]|select|join(" / ") or "—" }}</td>
             <td class="ct-acoes">
               <a href="{{ url_for('ver_boleto', condominio_id=condominio.id, unidade=u.unidade) }}" class="btn-ver-boleto">Ver boleto</a>
               <form method="post" class="form-enviar-unidade"
                     action="{{ url_for('enviar_individual', condominio_id=condominio.id, unidade=u.unidade) }}">
-                <button type="submit" class="btn-enviar-unidade">Enviar por email</button>
+                <button type="submit" class="btn-enviar-unidade">Enviar boleto</button>
               </form>
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="5" class="ct-vazio">Nenhuma unidade com boleto em aberto para este condomínio.</td></tr>
+          <tr><td colspan="6" class="ct-vazio">Nenhuma unidade com boleto em aberto para este condomínio.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -126,7 +136,8 @@
       botao.textContent = 'Enviando...';
 
       try {
-        const resp = await fetch(form.action, {
+        const canal = document.getElementById('canal-envio').value;
+        const resp = await fetch(form.action + '?canal=' + encodeURIComponent(canal), {
           method: 'POST',
           headers: { 'X-Requested-With': 'XMLHttpRequest' },
         });
@@ -141,20 +152,27 @@
         botao.disabled = false;
         botao.textContent = 'Erro ao enviar';
         botao.classList.add('btn-erro');
-        if (mostrarAlertaDeErro) alert(dados.mensagem || 'Falha ao enviar o email.');
+        if (mostrarAlertaDeErro) alert(dados.mensagem || 'Falha ao enviar o boleto.');
         return false;
       } catch (err) {
         botao.disabled = false;
         botao.textContent = 'Erro ao enviar';
         botao.classList.add('btn-erro');
-        if (mostrarAlertaDeErro) alert('Falha ao enviar o email: ' + err);
+        if (mostrarAlertaDeErro) alert('Falha ao enviar o boleto: ' + err);
         return false;
       }
     }
 
     document.getElementById('form-enviar-massa').addEventListener('submit', async (ev) => {
       ev.preventDefault();
-      if (!confirm('Enviar boletos por email para todas as unidades com cobrança em aberto?')) return;
+      const canalSel = document.getElementById('canal-envio');
+      const nomeCanal = canalSel.options[canalSel.selectedIndex].text;
+      const total = document.querySelectorAll('.form-enviar-unidade').length;
+      let aviso = `Enviar boletos por ${nomeCanal} para todas as ${total} unidades com cobrança em aberto?`;
+      if (canalSel.value !== 'email' && total > 200) {
+        aviso += '\n\nAtenção: o número de WhatsApp pode iniciar no máximo 250 conversas por dia enquanto a conta não for verificada na Meta. Acima disso os envios falham.';
+      }
+      if (!confirm(aviso)) return;
 
       const formularios = document.querySelectorAll('.form-enviar-unidade');
       for (const form of formularios) {
