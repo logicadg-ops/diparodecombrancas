@@ -127,10 +127,16 @@ def nome_arquivo_boleto(unidade, vencimento):
 
 
 def enviar_boleto(telefone, media_id, nome_arquivo, nome, condominio_nome, referencia,
-                  unidade, valor, vencimento, linha_digitavel):
+                  unidade, valor, vencimento, linha_digitavel, condominio_id):
     """Envia o template de boleto com o PDF (já enviado à Coexy) para um
     telefone. Devolve o id da mensagem (wamid)."""
-    chave = re.sub(r"[^A-Za-z0-9_-]", "", f"boleto-{telefone}-{unidade}-{vencimento or referencia}")
+    # O condomínio entra na chave porque condomínios diferentes podem ter os
+    # mesmos códigos de unidade (ex: RESERVA CANDEIAS e a TAXA EXTRA dele);
+    # sem isso, a Coexy recusaria o 2º boleto como repetição do 1º.
+    chave = re.sub(
+        r"[^A-Za-z0-9_-]", "",
+        f"boleto-{condominio_id}-{telefone}-{unidade}-{vencimento or referencia}",
+    )
     corpo = [
         _param((nome or "").split(" ")[0].title() or "Condômino"),
         _param(condominio_nome),

@@ -592,6 +592,7 @@ def _enviar_whatsapp_unidade(condominio, unidade, telefones, contato, obter_pdf,
             whatsapp_service.enviar_boleto(
                 telefone, media_id, nome_arquivo, contato["nome"], condominio["nome"],
                 referencia, unidade, valor, vencimento, linha_digitavel,
+                condominio_id=condominio["id"],
             )
             _registrar_log_envio(condominio, unidade, telefone, True,
                                  mes_referencia=mes_referencia_log, cobranca=cobranca_log, tipo="whatsapp")
