@@ -132,15 +132,16 @@ def _mes_arquivo(vencimento):
     return (vencimento or "")[:7] or None
 
 
-def _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override=None, mes_padrao=None):
+def _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override=None,
+                         mes_padrao=None, mes_arquivo=None):
     """Busca os dados de vencimento/valor/pix na Condomob (best-effort) e
-    verifica se há PDF no R2 pra essa unidade NO MÊS do vencimento (ou no
-    mês informado em `vencimento_override`, quando o envio já tem uma data
-    escolhida manualmente). Isso evita servir o PDF de um mês antigo quando
-    o boleto do mês atual ainda não foi re-enviado pro R2. Quando a Condomob
-    não tem cobrança em aberto (ex: condomínios criados só no sistema, como
-    taxas extras), usa `mes_padrao`. Não usa url_for, então pode ser chamada
-    de fora do contexto de request (ex: thread pool)."""
+    verifica se há PDF no R2 pra essa unidade no mês certo. O mês vem, em
+    ordem de prioridade: de `mes_arquivo` (escolhido na tela de envio), do
+    `vencimento_override` (data informada no envio), do vencimento da
+    Condomob ou, por último, de `mes_padrao` (ex: condomínios criados só no
+    sistema, como taxas extras, que não existem na Condomob). Nunca cai pra
+    um arquivo de outro mês. Não usa url_for, então pode ser chamada de fora
+    do contexto de request (ex: thread pool)."""
     try:
         cobranca = dict(
             condomob.consultar_cobranca_aberta(condominio_id, unidade, contato["cpf_cnpj"])
@@ -149,7 +150,8 @@ def _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override=No
         cobranca = {"vencimento": None, "valor": None, "pix": "", "linhaDigitavel": ""}
 
     mes = (
-        _mes_arquivo(vencimento_override)
+        mes_arquivo
+        or _mes_arquivo(vencimento_override)
         or _mes_arquivo(cobranca.get("vencimento"))
         or mes_padrao
     )
@@ -170,10 +172,13 @@ def _mes_mais_recente_no_r2(condominio_id, unidade, meses_r2=None):
     return lista[-1] if lista else None
 
 
-def _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=None, mes_padrao=None):
+def _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=None,
+                         mes_padrao=None, mes_arquivo=None):
     """Igual a `_dados_cobranca_2via`, mas já inclui o link estável do
     próprio sistema — só pode ser chamada dentro de um contexto de request."""
-    cobranca = _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override, mes_padrao)
+    cobranca = _dados_cobranca_2via(
+        condominio_id, unidade, contato, vencimento_override, mes_padrao, mes_arquivo
+    )
     cobranca["link"] = url_for(
         "boleto_2via_arquivo", condominio_id=condominio_id, unidade=unidade,
         mes=cobranca["mes_arquivo"], _external=True,
@@ -181,41 +186,13 @@ def _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=N
     return cobranca
 
 
-def _dados_unidade_2via(condominio_id, unidade_row, meses_r2):
-    contato = contato_da_unidade(unidade_row)
-    unidade = unidade_row.get("unidade")
-    try:
-        cobranca = _dados_cobranca_2via(
-            condominio_id, unidade, contato,
-            mes_padrao=_mes_mais_recente_no_r2(condominio_id, unidade, meses_r2),
-        )
-        # Sem vencimento na Condomob, o mês do arquivo serve pro filtro.
-        return True, cobranca.get("vencimento") or cobranca["mes_arquivo"]
-    except requests.RequestException:
-        # Falha pontual da Condomob numa unidade: mantém o PDF visível
-        # (já sabemos que existe no R2), só sem os dados de vencimento.
-        app.logger.warning(
-            "Condomob falhou pra unidade %s (condomínio %s)",
-            unidade_row.get("unidade"), condominio_id, exc_info=True,
-        )
-        return True, None
-    except r2_client.BoletoNaoEncontrado:
-        return False, None
-
-
-def marcar_unidades_2via(condominio_id, unidades):
-    """Consulta o R2 (e, quando dá, a Condomob) em paralelo pra saber quais
-    unidades têm PDF de 2ª via salvo, marcando `tem_boleto_2via` e
-    `vencimento_mes` (usado no filtro por mês)."""
-    meses_r2 = r2_client.meses_por_unidade(condominio_id)
-    with ThreadPoolExecutor(max_workers=10) as pool:
-        resultados = pool.map(
-            lambda u: _dados_unidade_2via(condominio_id, u, meses_r2), unidades
-        )
-    for unidade_row, (tem_boleto, vencimento) in zip(unidades, resultados):
-        unidade_row["tem_boleto_2via"] = tem_boleto
-        unidade_row["vencimento"] = vencimento
-        unidade_row["vencimento_mes"] = vencimento[:7] if vencimento else None
+def marcar_unidades_2via(condominio_id, unidades, mes_arquivo):
+    """Marca `tem_boleto_2via` nas unidades que têm PDF salvo no R2 na pasta
+    do mês escolhido. Uma única listagem do bucket, sem consultar a Condomob
+    unidade por unidade."""
+    com_pdf = {a["unidade"] for a in r2_client.listar_arquivos(condominio_id, mes_arquivo)}
+    for unidade_row in unidades:
+        unidade_row["tem_boleto_2via"] = unidade_row.get("unidade") in com_pdf
     return unidades
 
 
@@ -735,16 +712,14 @@ def ver_condominio_2via(condominio_id):
         flash("Condomínio não encontrado.", "error")
         return redirect(url_for("index"))
 
+    mes = _mes_selecionado_arquivos()
     unidades = supabase_client.get_unidades(condominio_id)
-    marcar_unidades_2via(condominio_id, unidades)
-    meses = sorted({u["vencimento_mes"] for u in unidades if u["vencimento_mes"]})
-    mes_selecionado = request.args.get("mes", "")
+    marcar_unidades_2via(condominio_id, unidades, mes)
     return render_template(
         "condominio_2via.html",
         condominio=condominio,
         unidades=unidades,
-        meses=meses,
-        mes_selecionado=mes_selecionado,
+        mes=mes,
         administradora_padrao=config.EMAIL_REMETENTE_NOME,
         condominios=supabase_client.get_condominios(),
         whatsapp_ativo=whatsapp_service.whatsapp_configurado(),
@@ -774,10 +749,12 @@ def ver_boleto_2via(condominio_id, unidade):
     contato = contato_da_unidade(unidade_row)
     erro = None
     cobranca = None
+    mes = (request.args.get("mes") or "").strip() or None
     try:
         cobranca = _montar_cobranca_2via(
             condominio_id, unidade, contato,
-            mes_padrao=_mes_mais_recente_no_r2(condominio_id, unidade),
+            mes_padrao=None if mes else _mes_mais_recente_no_r2(condominio_id, unidade),
+            mes_arquivo=mes,
         )
     except r2_client.BoletoNaoEncontrado as e:
         erro = str(e)
@@ -792,7 +769,8 @@ def ver_boleto_2via(condominio_id, unidade):
     )
 
 
-def _processar_envio_2via(condominio, unidade_row, canal, mes_referencia, administradora, vencimento):
+def _processar_envio_2via(condominio, unidade_row, canal, mes_referencia, administradora, vencimento,
+                         mes_arquivo=None):
     """Envia o PDF de 2ª via salvo no R2 pelos canais escolhidos.
     Devolve (sucesso, mensagem, status_http_se_erro). Precisa de contexto de
     request (o link do email usa url_for)."""
@@ -807,7 +785,9 @@ def _processar_envio_2via(condominio, unidade_row, canal, mes_referencia, admini
         return False, erro, 400
 
     try:
-        cobranca = _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=vencimento)
+        cobranca = _montar_cobranca_2via(
+            condominio_id, unidade, contato, vencimento_override=vencimento, mes_arquivo=mes_arquivo,
+        )
     except r2_client.BoletoNaoEncontrado:
         for email in emails:
             _registrar_log_envio(condominio, unidade, email, False, mensagem_erro="Sem boleto de 2ª via salvo",
@@ -815,7 +795,8 @@ def _processar_envio_2via(condominio, unidade_row, canal, mes_referencia, admini
         for telefone in telefones:
             _registrar_log_envio(condominio, unidade, telefone, False, mensagem_erro="Sem boleto de 2ª via salvo",
                                  mes_referencia=mes_referencia, cobranca={"vencimento": vencimento}, tipo="whatsapp")
-        return False, f"Unidade {unidade} não possui boleto de 2ª via salvo.", 400
+        no_mes = f" no mês {mes_arquivo}" if mes_arquivo else ""
+        return False, f"Unidade {unidade} não possui boleto de 2ª via salvo{no_mes}.", 400
 
     link_arquivo_real = r2_client.gerar_url_download(condominio_id, unidade, cobranca["mes_arquivo"])
     cobranca_log = {**cobranca, "vencimento": vencimento, "link": link_arquivo_real}
@@ -865,6 +846,12 @@ def _campos_2via():
     )
 
 
+def _mes_arquivo_envio():
+    """Mês (YYYY-MM) da pasta de PDFs escolhido na tela de envio. Vazio em
+    chamadas antigas, que então derivam o mês do vencimento."""
+    return (request.values.get("mes_arquivo") or "").strip() or None
+
+
 @app.route("/2via/condominio/<int:condominio_id>/unidade/<unidade>/enviar", methods=["POST"])
 def enviar_individual_2via(condominio_id, unidade):
     condominio = supabase_client.get_condominio(condominio_id)
@@ -880,7 +867,8 @@ def enviar_individual_2via(condominio_id, unidade):
         )
 
     sucesso, mensagem, status = _processar_envio_2via(
-        condominio, unidade_row, _canal_da_requisicao(), mes_referencia, administradora, vencimento
+        condominio, unidade_row, _canal_da_requisicao(), mes_referencia, administradora, vencimento,
+        mes_arquivo=_mes_arquivo_envio(),
     )
     return _responder_envio(sucesso, mensagem, status, "ver_condominio_2via", condominio_id)
 
@@ -898,10 +886,12 @@ def enviar_massa_2via(condominio_id):
         return redirect(url_for("ver_condominio_2via", condominio_id=condominio_id))
 
     canal = _canal_da_requisicao()
+    mes_arquivo = _mes_arquivo_envio()
     resultados = []
     for unidade_row in supabase_client.get_unidades(condominio_id):
         _, mensagem, _ = _processar_envio_2via(
-            condominio, unidade_row, canal, mes_referencia, administradora, vencimento
+            condominio, unidade_row, canal, mes_referencia, administradora, vencimento,
+            mes_arquivo=mes_arquivo,
         )
         resultados.append({"unidade": unidade_row.get("unidade"), "status": mensagem})
 
