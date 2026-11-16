@@ -77,6 +77,23 @@ def baixar_arquivo(condominio_id, unidade, mes_referencia=None):
     return obj["Body"].read()
 
 
+def meses_por_unidade(condominio_id):
+    """Mapeia cada unidade aos meses (YYYY-MM, em ordem crescente) que têm
+    PDF salvo na estrutura versionada por mês. Ignora as chaves antigas sem
+    mês. Uma única listagem do bucket por condomínio."""
+    meses = {}
+    paginator = _s3().get_paginator("list_objects_v2")
+    for pagina in paginator.paginate(
+        Bucket=config.R2_BUCKET_NAME, Prefix=f"{condominio_id}/"
+    ):
+        for obj in pagina.get("Contents", []):
+            partes = obj["Key"].split("/")
+            if len(partes) != 3 or not partes[2].endswith(".pdf"):
+                continue
+            meses.setdefault(partes[2][:-4], []).append(partes[1])
+    return {unidade: sorted(lista) for unidade, lista in meses.items()}
+
+
 def listar_arquivos(condominio_id, mes_referencia):
     """Lista os PDFs salvos pra um condomínio num mês específico, com
     unidade, tamanho e data da última modificação."""

@@ -132,13 +132,15 @@ def _mes_arquivo(vencimento):
     return (vencimento or "")[:7] or None
 
 
-def _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override=None):
+def _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override=None, mes_padrao=None):
     """Busca os dados de vencimento/valor/pix na Condomob (best-effort) e
     verifica se há PDF no R2 pra essa unidade NO MÊS do vencimento (ou no
     mês informado em `vencimento_override`, quando o envio já tem uma data
     escolhida manualmente). Isso evita servir o PDF de um mês antigo quando
-    o boleto do mês atual ainda não foi re-enviado pro R2. Não usa url_for,
-    então pode ser chamada de fora do contexto de request (ex: thread pool)."""
+    o boleto do mês atual ainda não foi re-enviado pro R2. Quando a Condomob
+    não tem cobrança em aberto (ex: condomínios criados só no sistema, como
+    taxas extras), usa `mes_padrao`. Não usa url_for, então pode ser chamada
+    de fora do contexto de request (ex: thread pool)."""
     try:
         cobranca = dict(
             condomob.consultar_cobranca_aberta(condominio_id, unidade, contato["cpf_cnpj"])
@@ -146,7 +148,11 @@ def _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override=No
     except condomob.CobrancaNaoEncontrada:
         cobranca = {"vencimento": None, "valor": None, "pix": "", "linhaDigitavel": ""}
 
-    mes = _mes_arquivo(vencimento_override) or _mes_arquivo(cobranca.get("vencimento"))
+    mes = (
+        _mes_arquivo(vencimento_override)
+        or _mes_arquivo(cobranca.get("vencimento"))
+        or mes_padrao
+    )
     if not mes or not r2_client.boleto_existe(condominio_id, unidade, mes):
         raise r2_client.BoletoNaoEncontrado(
             f"Sem boleto salvo para a unidade {unidade}" + (f" no mês {mes}" if mes else "")
@@ -155,10 +161,19 @@ def _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override=No
     return cobranca
 
 
-def _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=None):
+def _mes_mais_recente_no_r2(condominio_id, unidade, meses_r2=None):
+    """Último mês com PDF salvo pra unidade no R2 (fallback quando a
+    Condomob não informa vencimento)."""
+    if meses_r2 is None:
+        meses_r2 = r2_client.meses_por_unidade(condominio_id)
+    lista = meses_r2.get(unidade) or []
+    return lista[-1] if lista else None
+
+
+def _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=None, mes_padrao=None):
     """Igual a `_dados_cobranca_2via`, mas já inclui o link estável do
     próprio sistema — só pode ser chamada dentro de um contexto de request."""
-    cobranca = _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override)
+    cobranca = _dados_cobranca_2via(condominio_id, unidade, contato, vencimento_override, mes_padrao)
     cobranca["link"] = url_for(
         "boleto_2via_arquivo", condominio_id=condominio_id, unidade=unidade,
         mes=cobranca["mes_arquivo"], _external=True,
@@ -166,11 +181,16 @@ def _montar_cobranca_2via(condominio_id, unidade, contato, vencimento_override=N
     return cobranca
 
 
-def _dados_unidade_2via(condominio_id, unidade_row):
+def _dados_unidade_2via(condominio_id, unidade_row, meses_r2):
     contato = contato_da_unidade(unidade_row)
+    unidade = unidade_row.get("unidade")
     try:
-        cobranca = _dados_cobranca_2via(condominio_id, unidade_row.get("unidade"), contato)
-        return True, cobranca.get("vencimento")
+        cobranca = _dados_cobranca_2via(
+            condominio_id, unidade, contato,
+            mes_padrao=_mes_mais_recente_no_r2(condominio_id, unidade, meses_r2),
+        )
+        # Sem vencimento na Condomob, o mês do arquivo serve pro filtro.
+        return True, cobranca.get("vencimento") or cobranca["mes_arquivo"]
     except requests.RequestException:
         # Falha pontual da Condomob numa unidade: mantém o PDF visível
         # (já sabemos que existe no R2), só sem os dados de vencimento.
@@ -187,9 +207,10 @@ def marcar_unidades_2via(condominio_id, unidades):
     """Consulta o R2 (e, quando dá, a Condomob) em paralelo pra saber quais
     unidades têm PDF de 2ª via salvo, marcando `tem_boleto_2via` e
     `vencimento_mes` (usado no filtro por mês)."""
+    meses_r2 = r2_client.meses_por_unidade(condominio_id)
     with ThreadPoolExecutor(max_workers=10) as pool:
         resultados = pool.map(
-            lambda u: _dados_unidade_2via(condominio_id, u), unidades
+            lambda u: _dados_unidade_2via(condominio_id, u, meses_r2), unidades
         )
     for unidade_row, (tem_boleto, vencimento) in zip(unidades, resultados):
         unidade_row["tem_boleto_2via"] = tem_boleto
@@ -754,7 +775,10 @@ def ver_boleto_2via(condominio_id, unidade):
     erro = None
     cobranca = None
     try:
-        cobranca = _montar_cobranca_2via(condominio_id, unidade, contato)
+        cobranca = _montar_cobranca_2via(
+            condominio_id, unidade, contato,
+            mes_padrao=_mes_mais_recente_no_r2(condominio_id, unidade),
+        )
     except r2_client.BoletoNaoEncontrado as e:
         erro = str(e)
 
@@ -793,7 +817,7 @@ def _processar_envio_2via(condominio, unidade_row, canal, mes_referencia, admini
                                  mes_referencia=mes_referencia, cobranca={"vencimento": vencimento}, tipo="whatsapp")
         return False, f"Unidade {unidade} não possui boleto de 2ª via salvo.", 400
 
-    link_arquivo_real = r2_client.gerar_url_download(condominio_id, unidade)
+    link_arquivo_real = r2_client.gerar_url_download(condominio_id, unidade, cobranca["mes_arquivo"])
     cobranca_log = {**cobranca, "vencimento": vencimento, "link": link_arquivo_real}
 
     enviados, ja_enviados, falhas = [], [], []
