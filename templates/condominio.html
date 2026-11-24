@@ -13,6 +13,8 @@
     <h2 class="ct-titulo">{{ condominio.nome }}</h2>
     <p class="ct-subtitulo">
       <a href="{{ url_for('ver_condominio_2via', condominio_id=condominio.id) }}">Ver boletos 2ª via (arquivos salvos)</a>
+      ·
+      <a href="{{ url_for('lista_whatsapp', condominio_id=condominio.id, voltar='vivo') }}">Lista de envio por WhatsApp</a>
     </p>
   </section>
 
@@ -80,7 +82,8 @@
       </thead>
       <tbody>
         {% for u in unidades if u.tem_cobranca %}
-          <tr data-unidade="{{ u.unidade|lower }}" data-mes="{{ u.vencimento_mes or '' }}">
+          <tr data-unidade="{{ u.unidade|lower }}" data-mes="{{ u.vencimento_mes or '' }}"
+              data-whatsapp="{{ '1' if u.whatsapp_autorizado else '' }}">
             <td class="ct-codigo">{{ u.unidade }}</td>
             <td class="ct-codigo">{{ u.bloco }} / {{ u.apto }}</td>
             <td class="ct-nome">
@@ -89,7 +92,10 @@
                  class="icone-editar" title="Editar nome e email da unidade">✏️</a>
             </td>
             <td class="ct-email">{{ u.email or "—" }}</td>
-            <td class="ct-email">{{ [u.fone1, u.fone2]|select|join(" / ") or "—" }}</td>
+            <td class="ct-email">
+              {{ [u.fone1, u.fone2]|select|join(" / ") or "—" }}
+              {% if not u.whatsapp_autorizado %}<br><span class="muted">fora da lista de WhatsApp</span>{% endif %}
+            </td>
             <td class="ct-acoes">
               <a href="{{ url_for('ver_boleto', condominio_id=condominio.id, unidade=u.unidade) }}" class="btn-ver-boleto">Ver boleto</a>
               <form method="post" class="form-enviar-unidade"
@@ -167,14 +173,25 @@
       ev.preventDefault();
       const canalSel = document.getElementById('canal-envio');
       const nomeCanal = canalSel.options[canalSel.selectedIndex].text;
-      const total = document.querySelectorAll('.form-enviar-unidade').length;
-      let aviso = `Enviar boletos por ${nomeCanal} para todas as ${total} unidades com cobrança em aberto?`;
-      if (canalSel.value !== 'email' && total > 200) {
+      const todos = [...document.querySelectorAll('.form-enviar-unidade')];
+      const naLista = (form) => form.closest('tr').dataset.whatsapp === '1';
+      // Só WhatsApp: nem chama o servidor para quem está fora da lista.
+      const formularios = canalSel.value === 'whatsapp' ? todos.filter(naLista) : todos;
+      const total = formularios.length;
+      const totalWhatsapp = todos.filter(naLista).length;
+      if (!total) {
+        alert('Nenhuma unidade com cobrança em aberto está marcada na lista de envio por WhatsApp.');
+        return;
+      }
+      let aviso = `Enviar boletos por ${nomeCanal} para ${total} unidades com cobrança em aberto?`;
+      if (canalSel.value !== 'email') {
+        aviso += `\n\nWhatsApp: ${totalWhatsapp} de ${todos.length} unidades estão na lista de envio; as outras não recebem por WhatsApp.`;
+      }
+      if (canalSel.value !== 'email' && totalWhatsapp > 200) {
         aviso += '\n\nAtenção: o número de WhatsApp pode iniciar no máximo 250 conversas por dia enquanto a conta não for verificada na Meta. Acima disso os envios falham.';
       }
       if (!confirm(aviso)) return;
 
-      const formularios = document.querySelectorAll('.form-enviar-unidade');
       for (const form of formularios) {
         await enviarUnidade(form, { mostrarAlertaDeErro: false });
       }

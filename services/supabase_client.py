@@ -238,6 +238,38 @@ def atualizar_unidade(condominio_id, unidade, proprietario, email, fone1=None, f
     resp.raise_for_status()
 
 
+class ColunaWhatsappAusente(Exception):
+    """A coluna `unidades.whatsapp_autorizado` ainda não foi criada no
+    Supabase (falta rodar o SQL de criação)."""
+
+
+def _filtro_in(valores):
+    """Monta o filtro `in.(...)` do PostgREST com cada valor entre aspas
+    (códigos de unidade podem ter vírgula, ponto ou parênteses)."""
+    escapados = (str(v).replace("\\", "\\\\").replace('"', '\\"') for v in valores)
+    return "in.(" + ",".join(f'"{v}"' for v in escapados) + ")"
+
+
+def definir_whatsapp_autorizado(condominio_id, unidades, autorizado):
+    """Marca (ou desmarca) as unidades na lista de envio por WhatsApp.
+    Atualiza todos os registros de cada unidade (inclusive duplicados)."""
+    unidades = list(unidades)
+    for i in range(0, len(unidades), 100):
+        resp = requests.patch(
+            f"{config.SUPABASE_URL}/rest/v1/unidades",
+            headers={**_headers(), "Content-Type": "application/json"},
+            params={
+                "id_condominio": f"eq.{condominio_id}",
+                "unidade": _filtro_in(unidades[i:i + 100]),
+            },
+            json={"whatsapp_autorizado": bool(autorizado)},
+            timeout=30,
+        )
+        if resp.status_code == 400 and "whatsapp_autorizado" in resp.text:
+            raise ColunaWhatsappAusente(resp.text[:300])
+        resp.raise_for_status()
+
+
 def listar_envios_email(data_inicio, data_fim, contato=None, unidade=None, condominio=None):
     """Retorna os registros de envio de email (`enviowhatapp`, tipo=email) no
     período informado, usados para cruzar o histórico da SMTP API com a

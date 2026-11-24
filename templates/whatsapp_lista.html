@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}{{ condominio.nome }} - Lista de WhatsApp{% endblock %}
+{% block body_class %}pagina-larga{% endblock %}
+{% block content %}
+  <p><a href="{{ url_voltar }}">&larr; {{ condominio.nome }}</a></p>
+  <h2>{{ condominio.nome }} <span class="muted">— Lista de envio por WhatsApp</span></h2>
+  <p class="muted">
+    Só as unidades marcadas aqui recebem o boleto por WhatsApp. As outras continuam recebendo
+    por email normalmente. Marque apenas quem pediu ou autorizou receber pelo WhatsApp: mensagens
+    para quem não espera aumentam o risco de bloqueio do número e gastam a cota da API.
+  </p>
+
+  {% if not coluna_existe %}
+    <div class="flash flash-error">
+      A lista ainda não foi criada no banco. Rode este comando no SQL Editor do Supabase e recarregue a página:
+      <pre>{{ sql_coluna }}</pre>
+    </div>
+  {% endif %}
+
+  <div class="filtros">
+    <label>
+      Trocar de condomínio:
+      <select id="seletor-condominio">
+        {% for c in condominios %}
+          <option value="{{ c.id }}" {% if c.id == condominio.id %}selected{% endif %}>
+            {{ c.nome }}{% if c.status %} ({{ c.status }}){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Unidade:
+      <input type="text" id="filtro-unidade" placeholder="ex: 01-LT-001">
+    </label>
+    <label>
+      Mostrar:
+      <select id="filtro-situacao">
+        <option value="">Todas</option>
+        <option value="marcadas">Só marcadas</option>
+        <option value="desmarcadas">Só não marcadas</option>
+      </select>
+    </label>
+  </div>
+
+  <form method="post" id="form-lista">
+    <input type="hidden" name="voltar" value="{{ voltar }}">
+    <p>
+      <button type="button" id="btn-marcar-visiveis">Marcar as exibidas</button>
+      <button type="button" id="btn-desmarcar-visiveis">Desmarcar as exibidas</button>
+      <button type="submit">Salvar lista</button>
+    </p>
+    <p id="resumo" class="total-destaque"></p>
+
+    <table id="tabela-lista">
+      <thead>
+        <tr>
+          <th>Enviar</th>
+          <th>Unidade</th>
+          <th>Proprietário</th>
+          <th>Celular(es) que vão receber</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in unidades %}
+          <tr data-unidade="{{ u.unidade|lower }}">
+            <td>
+              <input type="checkbox" name="autorizadas" value="{{ u.unidade }}" class="chk-unidade"
+                     {% if u.whatsapp_autorizado %}checked{% endif %}
+                     {% if not u.telefones_whatsapp %}disabled title="Sem celular válido cadastrado"{% endif %}>
+            </td>
+            <td>{{ u.unidade }}</td>
+            <td>{{ u.proprietario or "—" }}</td>
+            <td>
+              {% if u.telefones_whatsapp %}
+                {{ u.telefones_whatsapp|join(" / ") }}
+              {% else %}
+                <span class="muted">sem celular válido{% if u.fone1 or u.fone2 %} ({{ [u.fone1, u.fone2]|select|join(" / ") }}){% endif %}</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4">Nenhuma unidade cadastrada para este condomínio.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p><button type="submit">Salvar lista</button></p>
+  </form>
+
+  <script>
+    document.getElementById('seletor-condominio').addEventListener('change', (ev) => {
+      const baseUrl = "{{ url_for('lista_whatsapp', condominio_id=0, voltar=voltar) }}";
+      window.location.href = baseUrl.replace('/0/', '/' + ev.target.value + '/');
+    });
+
+    const filtroUnidade = document.getElementById('filtro-unidade');
+    const filtroSituacao = document.getElementById('filtro-situacao');
+    const resumo = document.getElementById('resumo');
+    const linhas = [...document.querySelectorAll('#tabela-lista tbody tr[data-unidade]')];
+    const caixa = (tr) => tr.querySelector('.chk-unidade');
+    let alterado = false;
+
+    function aplicarFiltros() {
+      const unidade = filtroUnidade.value.trim().toLowerCase();
+      const situacao = filtroSituacao.value;
+      linhas.forEach((tr) => {
+        const marcada = caixa(tr).checked;
+        const bateSituacao = !situacao || (situacao === 'marcadas') === marcada;
+        tr.hidden = !((!unidade || tr.dataset.unidade.includes(unidade)) && bateSituacao);
+      });
+      atualizarResumo();
+    }
+
+    function atualizarResumo() {
+      const marcadas = linhas.filter((tr) => caixa(tr).checked).length;
+      const semCelular = linhas.filter((tr) => caixa(tr).disabled).length;
+      resumo.textContent = `${marcadas} de ${linhas.length} unidades marcadas para WhatsApp` +
+        (semCelular ? ` · ${semCelular} sem celular válido` : '') +
+        (alterado ? ' · alterações ainda não salvas' : '');
+    }
+
+    function marcarVisiveis(valor) {
+      linhas.forEach((tr) => {
+        if (!tr.hidden && !caixa(tr).disabled) caixa(tr).checked = valor;
+      });
+      alterado = true;
+      atualizarResumo();
+    }
+
+    document.getElementById('btn-marcar-visiveis').addEventListener('click', () => marcarVisiveis(true));
+    document.getElementById('btn-desmarcar-visiveis').addEventListener('click', () => marcarVisiveis(false));
+    document.querySelectorAll('.chk-unidade').forEach((c) => c.addEventListener('change', () => {
+      alterado = true;
+      atualizarResumo();
+    }));
+    filtroUnidade.addEventListener('input', aplicarFiltros);
+    filtroSituacao.addEventListener('change', aplicarFiltros);
+    document.getElementById('form-lista').addEventListener('submit', () => { alterado = false; });
+    window.addEventListener('beforeunload', (ev) => { if (alterado) { ev.preventDefault(); ev.returnValue = ''; } });
+    aplicarFiltros();
+  </script>
+{% endblock %}

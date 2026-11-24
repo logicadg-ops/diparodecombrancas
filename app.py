@@ -503,6 +503,61 @@ def editar_unidade(condominio_id, unidade):
     )
 
 
+SQL_COLUNA_WHATSAPP = (
+    "alter table public.unidades add column if not exists "
+    "whatsapp_autorizado boolean not null default false;"
+)
+
+
+@app.route("/condominio/<int:condominio_id>/whatsapp-lista", methods=["GET", "POST"])
+def lista_whatsapp(condominio_id):
+    """Lista de envio por WhatsApp: só as unidades marcadas aqui recebem
+    boleto por WhatsApp (o email não é afetado)."""
+    condominio = supabase_client.get_condominio(condominio_id)
+    if not condominio:
+        flash("Condomínio não encontrado.", "error")
+        return redirect(url_for("index"))
+
+    voltar = request.values.get("voltar", "")
+    unidades = supabase_client.get_unidades(condominio_id)
+
+    if request.method == "POST":
+        marcadas_form = set(request.form.getlist("autorizadas"))
+        marcadas_antes = {u["unidade"] for u in unidades if _whatsapp_autorizado(u)}
+        codigos = {u["unidade"] for u in unidades}
+        marcar = (marcadas_form & codigos) - marcadas_antes
+        desmarcar = marcadas_antes - marcadas_form
+        try:
+            if marcar:
+                supabase_client.definir_whatsapp_autorizado(condominio_id, marcar, True)
+            if desmarcar:
+                supabase_client.definir_whatsapp_autorizado(condominio_id, desmarcar, False)
+        except supabase_client.ColunaWhatsappAusente:
+            flash("A lista de WhatsApp ainda não foi criada no banco. Rode no SQL Editor do "
+                  "Supabase: " + SQL_COLUNA_WHATSAPP, "error")
+            return redirect(url_for("lista_whatsapp", condominio_id=condominio_id, voltar=voltar))
+        flash(f"Lista de WhatsApp salva: {len(marcar)} unidade(s) marcada(s), "
+              f"{len(desmarcar)} desmarcada(s).", "success")
+        return redirect(url_for("lista_whatsapp", condominio_id=condominio_id, voltar=voltar))
+
+    for u in unidades:
+        u["telefones_whatsapp"] = [
+            whatsapp_service.formatar_telefone(t) for t in whatsapp_service.telefones_da_unidade(u)
+        ]
+    coluna_existe = not unidades or any("whatsapp_autorizado" in u for u in unidades)
+    destinos_voltar = {"2via": "ver_condominio_2via", "vivo": "ver_condominio"}
+    return render_template(
+        "whatsapp_lista.html",
+        condominio=condominio,
+        unidades=unidades,
+        coluna_existe=coluna_existe,
+        sql_coluna=SQL_COLUNA_WHATSAPP,
+        voltar=voltar,
+        url_voltar=url_for(destinos_voltar.get(voltar, "ver_condominio_2via"), condominio_id=condominio_id),
+        condominios=supabase_client.get_condominios(),
+    )
+
+
 def _mes_referencia_de_data(data_iso):
     """Deriva 'MM/YYYY' a partir de uma data ISO ('YYYY-MM-DD'), pro log de
     envio quando não há um mês de referência explícito (fluxo ao vivo)."""
@@ -554,13 +609,35 @@ def _usa_whatsapp(canal):
     return canal in ("whatsapp", "ambos")
 
 
-def _validar_destinos(canal, unidade, emails, telefones):
+def _whatsapp_autorizado(unidade_row):
+    """Só envia WhatsApp para unidades marcadas na lista de envio (evita
+    banimento e gasto da API com quem não pediu). Sem a coluna no banco,
+    ninguém está marcado."""
+    return bool(unidade_row.get("whatsapp_autorizado"))
+
+
+def _telefones_para_envio(unidade_row, canal):
+    """Telefones que vão receber o WhatsApp e se a unidade ficou de fora
+    por não estar na lista de envio. Devolve (telefones, fora_da_lista)."""
+    if not _usa_whatsapp(canal):
+        return [], False
+    if not _whatsapp_autorizado(unidade_row):
+        return [], True
+    return whatsapp_service.telefones_da_unidade(unidade_row), False
+
+
+AVISO_FORA_DA_LISTA = "WhatsApp não enviado: unidade fora da lista de envio."
+
+
+def _validar_destinos(canal, unidade, emails, telefones, fora_da_lista=False):
     """Confere se a unidade tem para onde enviar no canal escolhido.
     Devolve a mensagem de erro, ou None se estiver tudo certo."""
     if _usa_whatsapp(canal) and not whatsapp_service.whatsapp_configurado():
         return "Envio por WhatsApp não configurado (falta a variável COEXY_CHANNEL_TOKEN)."
     if canal == "email" and not emails:
         return f"Unidade {unidade} não tem email cadastrado."
+    if fora_da_lista and (canal == "whatsapp" or not emails):
+        return f"Unidade {unidade} não está marcada na lista de envio por WhatsApp."
     if canal == "whatsapp" and not telefones:
         return f"Unidade {unidade} não tem telefone (fone1/fone2) válido cadastrado."
     if canal == "ambos" and not emails and not telefones:
@@ -633,9 +710,9 @@ def _processar_envio_ao_vivo(condominio, unidade_row, canal):
     unidade = unidade_row.get("unidade")
     contato = contato_da_unidade(unidade_row)
     emails = emails_da_unidade(unidade_row) if _usa_email(canal) else []
-    telefones = whatsapp_service.telefones_da_unidade(unidade_row) if _usa_whatsapp(canal) else []
+    telefones, fora_da_lista = _telefones_para_envio(unidade_row, canal)
 
-    erro = _validar_destinos(canal, unidade, emails, telefones)
+    erro = _validar_destinos(canal, unidade, emails, telefones, fora_da_lista)
     if erro:
         return False, erro, 400
 
@@ -674,6 +751,8 @@ def _processar_envio_ao_vivo(condominio, unidade_row, canal):
         falhas += w_falhas
 
     sucesso, mensagem = _resumo_envio(unidade, enviados, ja_enviados, falhas)
+    if fora_da_lista:
+        mensagem += " " + AVISO_FORA_DA_LISTA
     return sucesso, mensagem, 502
 
 
@@ -779,9 +858,9 @@ def _processar_envio_2via(condominio, unidade_row, canal, mes_referencia, admini
     condominio_id = condominio["id"]
     contato = contato_da_unidade(unidade_row)
     emails = emails_da_unidade(unidade_row) if _usa_email(canal) else []
-    telefones = whatsapp_service.telefones_da_unidade(unidade_row) if _usa_whatsapp(canal) else []
+    telefones, fora_da_lista = _telefones_para_envio(unidade_row, canal)
 
-    erro = _validar_destinos(canal, unidade, emails, telefones)
+    erro = _validar_destinos(canal, unidade, emails, telefones, fora_da_lista)
     if erro:
         return False, erro, 400
 
@@ -836,6 +915,8 @@ def _processar_envio_2via(condominio, unidade_row, canal, mes_referencia, admini
         falhas += w_falhas
 
     sucesso, mensagem = _resumo_envio(unidade, enviados, ja_enviados, falhas)
+    if fora_da_lista:
+        mensagem += " " + AVISO_FORA_DA_LISTA
     return sucesso, mensagem, 502
 
 
