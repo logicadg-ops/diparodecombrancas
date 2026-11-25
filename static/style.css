@@ -374,3 +374,7 @@ body.tela-cadastro .cad-btn-excluir:hover { background: var(--vermelho); color: 
   body.tela-condominio .ct-campo select,
   body.tela-condominio .ct-campo input { min-width: 0; width: 100%; }
 }
+
+/* Seleção de unidades para o envio em massa */
+.selecao-envio { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0 1rem; }
+.chk-envio { width: 1.1rem; height: 1.1rem; cursor: pointer; }
