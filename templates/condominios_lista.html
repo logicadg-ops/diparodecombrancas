@@ -1,55 +1,167 @@
 {% extends "base.html" %}
-{% block title %}Cadastro de Condomínios{% endblock %}
-{% block body_class %}pagina-larga tela-condominio tela-cadastro{% endblock %}
-{% block head_extra %}
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-{% endblock %}
+{% block title %}Condomínios{% endblock %}
+{% block body_class %}pagina-larga tela-cadastro{% endblock %}
 {% block content %}
+  {% set total = condominios|length %}
+  {% set ativos = condominios|selectattr('status')|map(attribute='status')|map('upper')|select('equalto', 'ATIVO')|list|length %}
+  {% set total_unidades = condominios|map(attribute='unidades')|select|sum %}
+  {% set cidades = condominios|map(attribute='cidade')|select|unique|list|sort %}
+
   <section class="ct-cabecalho">
-    <p class="ct-eyebrow">Administração · Cadastro</p>
+    <p class="ct-eyebrow">Administração / Cadastro</p>
     <div class="cad-topo">
-      <h2 class="ct-titulo">Cadastro de Condomínios</h2>
-      <a href="{{ url_for('novo_condominio') }}" class="ct-btn-massa">+ Novo condomínio</a>
+      <div>
+        <h2 class="ct-titulo">Condomínios</h2>
+        <p class="ct-subtitulo">Gerencie os condomínios e as unidades que recebem os boletos.</p>
+      </div>
+      <a href="{{ url_for('novo_condominio') }}" class="btn ct-btn-massa">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        Novo condomínio
+      </a>
     </div>
-    <p class="ct-subtitulo">{{ condominios|length }} condomínio(s) cadastrado(s)</p>
+  </section>
+
+  <section class="kpis">
+    <div class="kpi">
+      <div class="kpi-label"><span class="kpi-ic"><svg class="ic" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"/></svg></span>Condomínios</div>
+      <div class="kpi-valor">{{ total }}</div>
+      <div class="kpi-rodape">cadastrados</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label"><span class="kpi-ic"><svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>Ativos</div>
+      <div class="kpi-valor">{{ ativos }}</div>
+      <div class="kpi-rodape">{{ ((ativos / total * 100) if total else 0)|round|int }}% da base</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label"><span class="kpi-ic"><svg class="ic" viewBox="0 0 24 24"><path d="M3 9l9-6 9 6v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-9h6v9"/></svg></span>Unidades</div>
+      <div class="kpi-valor">{{ "{:,}".format(total_unidades).replace(",", ".") }}</div>
+      <div class="kpi-rodape">soma de todos os condomínios</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label"><span class="kpi-ic"><svg class="ic" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>Cidades</div>
+      <div class="kpi-valor">{{ cidades|length }}</div>
+      <div class="kpi-rodape" title="{{ cidades|join(', ') }}">{{ cidades|join(', ') }}</div>
+    </div>
   </section>
 
   <div class="ct-tabela-wrap">
+    <div class="tabela-toolbar">
+      <div class="busca">
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="search" id="cad-busca" placeholder="Buscar por nome ou ID Condomob…" autocomplete="off">
+      </div>
+      <select id="cad-cidade">
+        <option value="">Todas as cidades</option>
+        {% for cid in cidades %}<option value="{{ cid }}">{{ cid }}</option>{% endfor %}
+      </select>
+      <select id="cad-status">
+        <option value="">Todos os status</option>
+        <option value="ATIVO">Ativo</option>
+        <option value="INATIVO">Inativo</option>
+      </select>
+    </div>
+
     <table>
       <thead>
         <tr>
-          <th>ID (Condomob)</th>
-          <th>Nome</th>
-          <th>Cidade/UF</th>
-          <th>Unidades</th>
+          <th>Condomínio</th>
+          <th class="ocultar-mobile">Cidade</th>
+          <th class="num">Unidades</th>
           <th>Status</th>
-          <th>Ações</th>
+          <th></th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="cad-linhas">
         {% for c in condominios %}
-          <tr>
-            <td class="ct-codigo">{{ c.idcontominio }}</td>
-            <td class="ct-nome">{{ c.ds_condominio }}</td>
-            <td>{{ c.cidade or "—" }}{% if c.uf %}/{{ c.uf }}{% endif %}</td>
-            <td class="ct-codigo">{{ c.unidades or "—" }}</td>
-            <td><span class="cad-status cad-status-{{ (c.status or 'NONE')|lower }}">{{ c.status or "—" }}</span></td>
-            <td class="ct-acoes">
-              <a href="{{ url_for('editar_condominio', id_interno=c.id) }}" class="icone-editar" title="Editar">✏️</a>
-              <a href="{{ url_for('listar_unidades_cadastro', condominio_id=c.idcontominio) }}" class="btn-ver-boleto">Unidades</a>
-              <form method="post" class="cad-form-excluir"
-                    action="{{ url_for('excluir_condominio', id_interno=c.id) }}"
-                    onsubmit="return confirm('Excluir o condomínio \'{{ c.ds_condominio }}\'? Essa ação não pode ser desfeita.');">
-                <button type="submit" class="cad-btn-excluir">Excluir</button>
-              </form>
+          {% set nome = c.ds_condominio or '' %}
+          {% set status = (c.status or '')|upper %}
+          <tr data-busca="{{ (nome ~ ' ' ~ c.idcontominio)|lower }}" data-cidade="{{ c.cidade or '' }}" data-status="{{ status }}">
+            <td>
+              <span class="ct-nome">{{ (nome|title).replace(' Do ', ' do ').replace(' Da ', ' da ').replace(' De ', ' de ').replace(' Dos ', ' dos ').replace(' Das ', ' das ').replace(' E ', ' e ') if nome.isupper() else nome }}</span>
+              <span class="cad-id">{{ c.idcontominio }}</span>
+            </td>
+            <td class="ocultar-mobile muted">{{ c.cidade or "—" }}{% if c.uf %}/{{ c.uf }}{% endif %}</td>
+            <td class="num">{{ c.unidades or "—" }}</td>
+            <td>
+              {% if status %}
+                <span class="cad-status cad-status-{{ status|lower }}">{{ status|capitalize }}</span>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="cad-acoes">
+                <a href="{{ url_for('listar_unidades_cadastro', condominio_id=c.idcontominio) }}" class="btn-ver-boleto">
+                  <svg class="ic" viewBox="0 0 24 24"><path d="M3 9l9-6 9 6v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>
+                  Unidades
+                </a>
+                <details class="menu-acoes">
+                  <summary title="Mais ações"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></summary>
+                  <div class="menu-acoes-lista">
+                    <a href="{{ url_for('editar_condominio', id_interno=c.id) }}">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                      Editar
+                    </a>
+                    <hr>
+                    <form method="post" action="{{ url_for('excluir_condominio', id_interno=c.id) }}" data-nome="{{ nome }}"
+                          onsubmit="return confirm('Excluir o condomínio &quot;' + this.dataset.nome + '&quot; e o cadastro de suas unidades?\n\nEssa ação não pode ser desfeita.');">
+                      <button type="submit" class="perigo">
+                        <svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                        Excluir
+                      </button>
+                    </form>
+                  </div>
+                </details>
+              </div>
             </td>
           </tr>
-        {% else %}
-          <tr><td colspan="6" class="ct-vazio">Nenhum condomínio cadastrado ainda.</td></tr>
         {% endfor %}
+        <tr id="cad-vazio" {% if condominios %}hidden{% endif %}>
+          <td colspan="5" class="ct-vazio">
+            {% if condominios %}Nenhum condomínio encontrado com esses filtros.{% else %}Nenhum condomínio cadastrado ainda.{% endif %}
+          </td>
+        </tr>
       </tbody>
     </table>
+
+    <div class="tabela-rodape">
+      <span id="cad-contagem">Mostrando {{ total }} de {{ total }} condomínios</span>
+    </div>
   </div>
+
+  <script>
+    (function () {
+      const busca = document.getElementById('cad-busca');
+      const cidade = document.getElementById('cad-cidade');
+      const status = document.getElementById('cad-status');
+      const linhas = document.querySelectorAll('#cad-linhas tr[data-busca]');
+      const vazio = document.getElementById('cad-vazio');
+      const contagem = document.getElementById('cad-contagem');
+      const total = linhas.length;
+
+      function filtrar() {
+        const q = busca.value.trim().toLowerCase();
+        let visiveis = 0;
+        linhas.forEach((tr) => {
+          const ok = (!q || tr.dataset.busca.includes(q)) &&
+                     (!cidade.value || tr.dataset.cidade === cidade.value) &&
+                     (!status.value || tr.dataset.status === status.value);
+          tr.hidden = !ok;
+          if (ok) visiveis++;
+        });
+        if (total) vazio.hidden = visiveis > 0;
+        contagem.textContent = 'Mostrando ' + visiveis + ' de ' + total + ' condomínios';
+      }
+      busca.addEventListener('input', filtrar);
+      cidade.addEventListener('change', filtrar);
+      status.addEventListener('change', filtrar);
+
+      // Fecha o menu ⋮ ao clicar fora ou abrir outro
+      document.addEventListener('click', (ev) => {
+        document.querySelectorAll('details.menu-acoes[open]').forEach((d) => {
+          if (!d.contains(ev.target)) d.removeAttribute('open');
+        });
+      });
+    })();
+  </script>
 {% endblock %}

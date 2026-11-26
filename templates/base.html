@@ -2,27 +2,39 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Cobrança de Condomínios{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   {% block head_extra %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
-  <header>
-    <a href="{{ url_for('index') }}"><h1>Cobrança de Condomínios</h1></a>
-    {% if session.get('usuario_email') %}
-      <span class="sessao-usuario">
-        {{ session['usuario_email'] }} ·
-        <a href="{{ url_for('logout') }}">Sair</a>
-      </span>
-    {% endif %}
+  {% set ep = request.endpoint or '' %}
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="logo" href="{{ url_for('index') }}">
+        <span class="logo-mark">CC</span>
+        Cobrança de Condomínios
+      </a>
+      {% if session.get('usuario_email') %}
+        <nav class="menu-principal">
+          <a href="{{ url_for('index') }}"
+             class="{{ 'ativo' if ep in ('index', 'ver_condominio', 'ver_condominio_2via', 'lista_whatsapp') }}">Enviar boletos</a>
+          <a href="{{ url_for('listar_condominios') }}"
+             class="{{ 'ativo' if 'condominio' in ep and ep not in ('ver_condominio', 'ver_condominio_2via') or 'unidade' in ep }}">Condomínios</a>
+          <a href="{{ url_for('historico_emails') }}"
+             class="{{ 'ativo' if ep == 'historico_emails' }}">Histórico de e-mails</a>
+        </nav>
+        <div class="sessao-usuario">
+          <span class="email-usuario">{{ session['usuario_email'] }}</span>
+          <span class="avatar" title="{{ session['usuario_email'] }}">{{ session['usuario_email'][:2] }}</span>
+          <a href="{{ url_for('logout') }}" title="Sair">Sair</a>
+        </div>
+      {% endif %}
+    </div>
   </header>
-  {% if session.get('usuario_email') %}
-    <nav class="menu-principal">
-      <a href="{{ url_for('index') }}">Enviar boletos</a>
-      <a href="{{ url_for('listar_condominios') }}">Cadastro de Condomínios</a>
-      <a href="{{ url_for('historico_emails') }}">Histórico de emails</a>
-    </nav>
-  {% endif %}
   <main>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
